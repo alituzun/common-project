@@ -1830,8 +1830,8 @@ app.get('/xps-ranked/users-html', async (req, res) => {
           qStats = qStats.eq('user_id', digits);
         } else {
           const like = `%${q}%`;
-          // users.username üzerinde arama (join edilen tablo)
-          qStats = qStats.ilike('username', like, { foreignTable: 'users' });
+          // display_name üzerinde arama (user_profile_stats.display_name)
+          qStats = qStats.ilike('display_name', like);
         }
       }
 
