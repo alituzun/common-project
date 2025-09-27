@@ -1525,16 +1525,20 @@ app.get('/xps-ranked/profile-xp-sum-20250926', async (req, res) => {
   }
 });
 
-// Back-compat: Keep existing handlers but expose cleaner paths without the xps-ranked prefix
-// New canonical routes
-app.get('/summary-html', async (req, res, next) => {
-  // delegate to the existing handler by calling it directly
-  req.url = req.url.replace('/summary-html', '/xps-ranked/summary-html');
-  next();
+// Root → summary
+app.get('/', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/summary-html' + q);
 });
-app.get('/users-html', async (req, res, next) => {
-  req.url = req.url.replace('/users-html', '/xps-ranked/users-html');
-  next();
+
+// Canonical routes: Redirect to existing handlers with query preserved
+app.get('/summary-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/xps-ranked/summary-html' + q);
+});
+app.get('/users-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/xps-ranked/users-html' + q);
 });
 
 // GET /xps-ranked/summary-html
@@ -1546,8 +1550,9 @@ app.get('/xps-ranked/summary-html', async (req, res) => {
     const xpFile = req.query.xpFile ? String(req.query.xpFile) : path.join(process.cwd(), 'output', 'profile-xp.json');
     const activityFile = req.query.activityFile ? String(req.query.activityFile) : path.join(process.cwd(), 'output', 'profile-activity.json');
     const onlyOk = String(req.query.onlyOk ?? 'true').toLowerCase() !== 'false';
-    const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'summary.html');
-    const writeFile = String(req.query.writeFile ?? 'true').toLowerCase() !== 'false';
+  const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'summary.html');
+  const writeFile = String(req.query.writeFile ?? 'true').toLowerCase() !== 'false';
+  const canWrite = writeFile && !(process.env.VERCEL || process.env.NODE_ENV === 'production');
     const threshold = Number(req.query.threshold ?? 1000) || 1000;
     const useSupabase = String(req.query.useSupabase ?? 'true').toLowerCase() !== 'false';
 
@@ -1758,7 +1763,7 @@ app.get('/xps-ranked/summary-html', async (req, res) => {
   </body>
   </html>`;
 
-    if (writeFile) {
+    if (canWrite) {
       await fs.mkdir(path.dirname(outFile), { recursive: true });
       await fs.writeFile(outFile, html, 'utf8');
     }
@@ -1787,8 +1792,9 @@ app.get('/xps-ranked/users-html', async (req, res) => {
     const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 50) || 50));
   const sortBy = (req.query.sortBy ? String(req.query.sortBy) : 'xp').toLowerCase();
   const order = (req.query.order ? String(req.query.order) : 'desc').toLowerCase();
-    const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'users.html');
-    const writeFile = String(req.query.writeFile ?? 'true').toLowerCase() !== 'false';
+  const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'users.html');
+  const writeFile = String(req.query.writeFile ?? 'true').toLowerCase() !== 'false';
+  const canWrite = writeFile && !(process.env.VERCEL || process.env.NODE_ENV === 'production');
   const q = (req.query.q ? String(req.query.q) : '').trim();
 
     async function readJsonSafe(file) {
@@ -1991,7 +1997,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
   </body>
   </html>`;
 
-      if (writeFile) {
+      if (canWrite) {
         await fs.mkdir(path.dirname(outFile), { recursive: true });
         await fs.writeFile(outFile, html, 'utf8');
       }
