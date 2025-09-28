@@ -13,7 +13,7 @@
     body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--text)}
   header{padding:clamp(16px, 3vw, 28px) 20px; border-bottom:1px solid var(--line); text-align:center}
   h1{margin:0; font-size:clamp(18px, 2.5vw, 26px); letter-spacing:0.2px}
-  .topnav{display:flex; gap:10px; align-items:center; justify-content:center}
+  .topnav{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap}
   .topnav .sep{color:var(--muted)}
   .btn{display:inline-block; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--text); text-decoration:none; font-size:13px}
   .btn:hover{border-color:var(--accent); color:var(--accent)}
@@ -34,46 +34,53 @@
   <a class="btn current" href="/summary-html">Common Stats</a>
     <span class="sep">•</span>
   <a class="btn" href="/users-html">Users stats»</a>
+    <span class="sep">•</span>
+  <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
   </div>
   <div class="meta">Data as of 27.09.2025</div>
+  <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
       <div class="grid">
         <div class="card">
           <div class="label">Total Users</div>
-          <div class="value">41,135</div>
+          <div class="value">49,563</div>
         </div>
         <div class="card">
           <div class="label">Total Aura</div>
-          <div class="value">1,940,878</div>
+          <div class="value">2,046,025</div>
         </div>
         <div class="card">
           <div class="label">Max Aura</div>
-          <div class="value">30,582</div>
+          <div class="value">31,122</div>
         </div>
         <div class="card">
           <div class="label">Users > 1,000 Aura</div>
-          <div class="value">222</div>
+          <div class="value">227</div>
+        </div>
+        <div class="card">
+          <div class="label">Zero Aura Users</div>
+          <div class="value">15,077</div>
         </div>
         <div class="card">
           <div class="label">Total coin created by users</div>
-          <div class="value">177,448</div>
+          <div class="value">208,392</div>
         </div>
         <div class="card">
           <div class="label">Threads</div>
-          <div class="value">66,230</div>
+          <div class="value">64,789</div>
         </div>
         <div class="card">
           <div class="label">Comments</div>
-          <div class="value">53,084</div>
+          <div class="value">56,826</div>
         </div>
         <div class="card">
           <div class="label">Total Upvotes</div>
-          <div class="value">142,793</div>
+          <div class="value">144,674</div>
         </div>
         <div class="card">
           <div class="label">Comment Threads</div>
-          <div class="value">53,084</div>
+          <div class="value">56,826</div>
         </div>
       </div>
     </div>

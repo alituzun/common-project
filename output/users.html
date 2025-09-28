@@ -13,7 +13,7 @@
     body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--text)}
     header{padding:16px 20px; border-bottom:1px solid var(--line); text-align:center}
     h1{margin:0; font-size:22px; letter-spacing:0.2px}
-    .topnav{display:flex; gap:10px; align-items:center; justify-content:center}
+    .topnav{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap}
     .topnav .sep{color:var(--muted)}
     .btn{display:inline-block; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--text); text-decoration:none; font-size:13px}
     .btn:hover{border-color:var(--accent); color:var(--accent)}
@@ -21,7 +21,8 @@
     .container{padding:14px 16px; max-width:1280px; margin:0 auto}
     .toolbar{display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; margin-bottom:10px}
     .pager a{color:var(--accent); text-decoration:none; margin:0 6px}
-    table{width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+    .table-wrap{width:100%; overflow-x:auto}
+    table{width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; min-width:720px}
     thead th{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; padding:10px; text-align:left; background:#0d1526}
     tbody td{padding:10px; border-top:1px solid var(--line)}
     .userbox{display:flex; align-items:center; gap:10px}
@@ -30,7 +31,7 @@
     .sub{color:var(--muted); font-size:11px}
     .cell.xp,.cell.addresses,.cell.threads,.cell.comments,.cell.upvotes,.cell.cthreads{font-variant-numeric:tabular-nums}
     .pager{margin-top:12px; text-align:center}
-    @media (max-width:760px){ .sub{display:none} thead{display:none} table,tbody,tr,td{display:block;width:100%} tbody td{border:none; padding:8px 10px} tr{border:1px solid var(--line); border-radius:12px; margin-bottom:10px; background:var(--card)} .cell{display:flex; justify-content:space-between} .cell::before{content:attr(data-label); color:var(--muted)} }
+    @media (max-width:760px){ .sub{display:none} thead{display:none} table,tbody,tr,td{display:block;width:100%} tbody td{border:none; padding:8px 10px} tr{border:1px solid var(--line); border-radius:12px; margin-bottom:10px; background:var(--card)} .cell{display:flex; justify-content:space-between; gap:10px} .cell::before{content:attr(data-label); color:var(--muted); flex:0 0 auto} .name{word-break:break-word; overflow-wrap:anywhere} }
   </style>
   </head>
   <body>
@@ -39,13 +40,16 @@
         <a class="btn" href="/summary-html">Common Stats</a>
         <span class="sep">•</span>
         <a class="btn current" href="/users-html">Users stats»</a>
+        <span class="sep">•</span>
+        <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
       </div>
-      <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 27.09.2025</div>
+  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 27.09.2025</div>
+  <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
       <div class="toolbar">
         <div>
-          <div>Totals: 39,336 • Page 1 / 787 • Sorted by xp desc</div>
+          <div>Totals: 54,627 • Page 1 / 1,093 • Sorted by xp desc</div>
           <form method="GET" action="/users-html" style="display:flex; gap:6px; align-items:center; margin-top:6px">
             <input type="hidden" name="sortBy" value="xp" />
             <input type="hidden" name="order" value="desc" />
@@ -59,9 +63,10 @@
           
           
           <a href="/users-html?page=2&limit=50&sortBy=xp&order=desc&onlyOk=true">Next</a>
-          <a href="/users-html?page=787&limit=50&sortBy=xp&order=desc&onlyOk=true">Last</a>
+          <a href="/users-html?page=1093&limit=50&sortBy=xp&order=desc&onlyOk=true">Last</a>
         </div>
       </div>
+      <div class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -74,915 +79,967 @@
             <th>Comments</th>
             <th>Total Upvotes</th>
             <th>Comment Threads</th>
+            <th>Lamumu holder</th>
           </tr>
         </thead>
         <tbody>
           
       <tr>
-        <td class="cell rank">1</td>
-        <td class="cell id">513,255</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">1</td>
+        <td class="cell id" data-label="ID">513,255</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/864ba27a-523e-4b68-ba33-8837005cc869.png" alt="AnyYas" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">AnyYas</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">AnyYas</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">30,582</td>
-        <td class="cell addresses">722</td>
-        <td class="cell threads">47</td>
-        <td class="cell comments">39</td>
-        <td class="cell upvotes">13</td>
-        <td class="cell cthreads">39</td>
+        <td class="cell xp" data-label="Aura">31,122</td>
+        <td class="cell addresses" data-label="Total coin created by users">722</td>
+        <td class="cell threads" data-label="Threads">47</td>
+        <td class="cell comments" data-label="Comments">39</td>
+        <td class="cell upvotes" data-label="Total Upvotes">13</td>
+        <td class="cell cthreads" data-label="Comment Threads">39</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">2</td>
-        <td class="cell id">372,605</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">2</td>
+        <td class="cell id" data-label="ID">372,605</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/0847e7f5-4d96-4406-8f30-c3082fa2f27c.png" alt="exploratorywhimper22" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">exploratorywhimper22</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">exploratorywhimper22</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">28,257</td>
-        <td class="cell addresses">34</td>
-        <td class="cell threads">45</td>
-        <td class="cell comments">10</td>
-        <td class="cell upvotes">20</td>
-        <td class="cell cthreads">10</td>
+        <td class="cell xp" data-label="Aura">28,257</td>
+        <td class="cell addresses" data-label="Total coin created by users">34</td>
+        <td class="cell threads" data-label="Threads">45</td>
+        <td class="cell comments" data-label="Comments">10</td>
+        <td class="cell upvotes" data-label="Total Upvotes">20</td>
+        <td class="cell cthreads" data-label="Comment Threads">10</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">3</td>
-        <td class="cell id">525,596</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">3</td>
+        <td class="cell id" data-label="ID">525,596</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/bd58293e-8a2c-4a12-8f69-d1f6b174d3a7.jpg" alt="berkay" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">berkay</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">berkay</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">20,140</td>
-        <td class="cell addresses">256</td>
-        <td class="cell threads">8</td>
-        <td class="cell comments">2</td>
-        <td class="cell upvotes">5</td>
-        <td class="cell cthreads">2</td>
+        <td class="cell xp" data-label="Aura">20,140</td>
+        <td class="cell addresses" data-label="Total coin created by users">256</td>
+        <td class="cell threads" data-label="Threads">8</td>
+        <td class="cell comments" data-label="Comments">2</td>
+        <td class="cell upvotes" data-label="Total Upvotes">5</td>
+        <td class="cell cthreads" data-label="Comment Threads">2</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">4</td>
-        <td class="cell id">2,248,987</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">4</td>
+        <td class="cell id" data-label="ID">2,248,987</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/5ca7e6f0-6b6b-48a6-9fe5-001afeb46bfc.jpg" alt="tokyom" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">tokyom</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">tokyom</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">13,623</td>
-        <td class="cell addresses">144</td>
-        <td class="cell threads">6</td>
-        <td class="cell comments">0</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">0</td>
+        <td class="cell xp" data-label="Aura">13,623</td>
+        <td class="cell addresses" data-label="Total coin created by users">144</td>
+        <td class="cell threads" data-label="Threads">6</td>
+        <td class="cell comments" data-label="Comments">0</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">0</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">5</td>
-        <td class="cell id">528,066</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">5</td>
+        <td class="cell id" data-label="ID">528,066</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/3fb0aaa2-a2a8-4957-840e-d588ad6e8a35.png" alt="realworker.eth" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">realworker.eth</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">realworker.eth</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">11,127</td>
-        <td class="cell addresses">379</td>
-        <td class="cell threads">21</td>
-        <td class="cell comments">15</td>
-        <td class="cell upvotes">1</td>
-        <td class="cell cthreads">15</td>
+        <td class="cell xp" data-label="Aura">11,127</td>
+        <td class="cell addresses" data-label="Total coin created by users">379</td>
+        <td class="cell threads" data-label="Threads">21</td>
+        <td class="cell comments" data-label="Comments">15</td>
+        <td class="cell upvotes" data-label="Total Upvotes">1</td>
+        <td class="cell cthreads" data-label="Comment Threads">15</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">6</td>
-        <td class="cell id">377,074</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">6</td>
+        <td class="cell id" data-label="ID">377,074</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ae0c37ea-c836-4f15-b9d6-19f851feff06.jpg" alt="jovialache68" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">jovialache68</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">jovialache68</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">10,254</td>
-        <td class="cell addresses">38</td>
-        <td class="cell threads">14</td>
-        <td class="cell comments">10</td>
-        <td class="cell upvotes">29</td>
-        <td class="cell cthreads">10</td>
+        <td class="cell xp" data-label="Aura">10,254</td>
+        <td class="cell addresses" data-label="Total coin created by users">38</td>
+        <td class="cell threads" data-label="Threads">14</td>
+        <td class="cell comments" data-label="Comments">10</td>
+        <td class="cell upvotes" data-label="Total Upvotes">29</td>
+        <td class="cell cthreads" data-label="Comment Threads">10</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">7</td>
-        <td class="cell id">387,244</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">7</td>
+        <td class="cell id" data-label="ID">387,244</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/57c23d4b-2d6e-4696-bcc4-3b66ff81b316.jpg" alt="restrictedriverbed64" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">restrictedriverbed64</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">restrictedriverbed64</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">7,989</td>
-        <td class="cell addresses">20</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">9</td>
-        <td class="cell upvotes">45</td>
-        <td class="cell cthreads">9</td>
+        <td class="cell xp" data-label="Aura">7,989</td>
+        <td class="cell addresses" data-label="Total coin created by users">20</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">9</td>
+        <td class="cell upvotes" data-label="Total Upvotes">45</td>
+        <td class="cell cthreads" data-label="Comment Threads">9</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">8</td>
-        <td class="cell id">387,247</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">8</td>
+        <td class="cell id" data-label="ID">387,247</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/794bb7a3-17d7-407a-b52e-2987501221b5.png" alt="hazellard78" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">hazellard78</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">hazellard78</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">7,900</td>
-        <td class="cell addresses">13</td>
-        <td class="cell threads">9</td>
-        <td class="cell comments">6</td>
-        <td class="cell upvotes">8</td>
-        <td class="cell cthreads">6</td>
+        <td class="cell xp" data-label="Aura">7,900</td>
+        <td class="cell addresses" data-label="Total coin created by users">13</td>
+        <td class="cell threads" data-label="Threads">9</td>
+        <td class="cell comments" data-label="Comments">6</td>
+        <td class="cell upvotes" data-label="Total Upvotes">8</td>
+        <td class="cell cthreads" data-label="Comment Threads">6</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">9</td>
-        <td class="cell id">387,246</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">9</td>
+        <td class="cell id" data-label="ID">387,246</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/9f40b221-e2c7-4052-a7de-e580222baaa9.png" alt="thermonucleardistance86" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">thermonucleardistance86</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">thermonucleardistance86</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">7,884</td>
-        <td class="cell addresses">15</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">9</td>
-        <td class="cell upvotes">32</td>
-        <td class="cell cthreads">9</td>
+        <td class="cell xp" data-label="Aura">7,884</td>
+        <td class="cell addresses" data-label="Total coin created by users">15</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">9</td>
+        <td class="cell upvotes" data-label="Total Upvotes">32</td>
+        <td class="cell cthreads" data-label="Comment Threads">9</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">10</td>
-        <td class="cell id">387,255</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">10</td>
+        <td class="cell id" data-label="ID">387,255</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="desolatetravel33" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">desolatetravel33</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">desolatetravel33</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">7,874</td>
-        <td class="cell addresses">16</td>
-        <td class="cell threads">13</td>
-        <td class="cell comments">7</td>
-        <td class="cell upvotes">35</td>
-        <td class="cell cthreads">7</td>
+        <td class="cell xp" data-label="Aura">7,874</td>
+        <td class="cell addresses" data-label="Total coin created by users">16</td>
+        <td class="cell threads" data-label="Threads">13</td>
+        <td class="cell comments" data-label="Comments">7</td>
+        <td class="cell upvotes" data-label="Total Upvotes">35</td>
+        <td class="cell cthreads" data-label="Comment Threads">7</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">11</td>
-        <td class="cell id">388,548</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">11</td>
+        <td class="cell id" data-label="ID">388,548</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/72bf12fb-fb25-4911-8036-ce961c130e34.jpeg" alt="owl.eth" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">owl.eth</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">owl.eth</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">6,940</td>
-        <td class="cell addresses">140</td>
-        <td class="cell threads">18</td>
-        <td class="cell comments">8</td>
-        <td class="cell upvotes">50</td>
-        <td class="cell cthreads">8</td>
+        <td class="cell xp" data-label="Aura">6,940</td>
+        <td class="cell addresses" data-label="Total coin created by users">140</td>
+        <td class="cell threads" data-label="Threads">18</td>
+        <td class="cell comments" data-label="Comments">8</td>
+        <td class="cell upvotes" data-label="Total Upvotes">50</td>
+        <td class="cell cthreads" data-label="Comment Threads">8</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">12</td>
-        <td class="cell id">513,846</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">12</td>
+        <td class="cell id" data-label="ID">513,846</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/273aa1a0-56f6-4d24-af0d-711ee3692dff.jpg" alt="Belialoglu" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Belialoglu</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Belialoglu</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">6,844</td>
-        <td class="cell addresses">201</td>
-        <td class="cell threads">1</td>
-        <td class="cell comments">1</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">1</td>
+        <td class="cell xp" data-label="Aura">6,844</td>
+        <td class="cell addresses" data-label="Total coin created by users">201</td>
+        <td class="cell threads" data-label="Threads">1</td>
+        <td class="cell comments" data-label="Comments">1</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">1</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">13</td>
-        <td class="cell id">512,248</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">13</td>
+        <td class="cell id" data-label="ID">512,248</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/40859d02-859d-4cbf-a388-866f93004267.png" alt="Emsalettin" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Emsalettin</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Emsalettin</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">6,736</td>
-        <td class="cell addresses">182</td>
-        <td class="cell threads">8</td>
-        <td class="cell comments">7</td>
-        <td class="cell upvotes">26</td>
-        <td class="cell cthreads">7</td>
+        <td class="cell xp" data-label="Aura">6,736</td>
+        <td class="cell addresses" data-label="Total coin created by users">182</td>
+        <td class="cell threads" data-label="Threads">8</td>
+        <td class="cell comments" data-label="Comments">7</td>
+        <td class="cell upvotes" data-label="Total Upvotes">26</td>
+        <td class="cell cthreads" data-label="Comment Threads">7</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">14</td>
-        <td class="cell id">512,755</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">14</td>
+        <td class="cell id" data-label="ID">512,755</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/d26f3927-5cb4-41d8-9043-c09dfd50019d.jpg" alt="Trcevalker" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Trcevalker</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Trcevalker</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">6,259</td>
-        <td class="cell addresses">247</td>
-        <td class="cell threads">30</td>
-        <td class="cell comments">11</td>
-        <td class="cell upvotes">12</td>
-        <td class="cell cthreads">11</td>
+        <td class="cell xp" data-label="Aura">6,259</td>
+        <td class="cell addresses" data-label="Total coin created by users">247</td>
+        <td class="cell threads" data-label="Threads">30</td>
+        <td class="cell comments" data-label="Comments">11</td>
+        <td class="cell upvotes" data-label="Total Upvotes">12</td>
+        <td class="cell cthreads" data-label="Comment Threads">11</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">15</td>
-        <td class="cell id">516,291</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">15</td>
+        <td class="cell id" data-label="ID">516,291</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/ebeab727-2bdb-4b56-9582-4d243feea94c.png" alt="Annamarti" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Annamarti</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Annamarti</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">6,003</td>
-        <td class="cell addresses">192</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">10</td>
-        <td class="cell upvotes">10</td>
-        <td class="cell cthreads">10</td>
+        <td class="cell xp" data-label="Aura">6,003</td>
+        <td class="cell addresses" data-label="Total coin created by users">192</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">10</td>
+        <td class="cell upvotes" data-label="Total Upvotes">10</td>
+        <td class="cell cthreads" data-label="Comment Threads">10</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">16</td>
-        <td class="cell id">515,857</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">16</td>
+        <td class="cell id" data-label="ID">515,857</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/f9ab063d-4abd-4626-89dc-9daf7a0a1442.png" alt="saurons" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">saurons</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">saurons</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,930</td>
-        <td class="cell addresses">199</td>
-        <td class="cell threads">7</td>
-        <td class="cell comments">7</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">7</td>
+        <td class="cell xp" data-label="Aura">5,930</td>
+        <td class="cell addresses" data-label="Total coin created by users">199</td>
+        <td class="cell threads" data-label="Threads">7</td>
+        <td class="cell comments" data-label="Comments">7</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">7</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">17</td>
-        <td class="cell id">515,627</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">17</td>
+        <td class="cell id" data-label="ID">515,627</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/44ca7175-eabc-4869-ba64-8a48232b47cf.jpg" alt="0xardaeth" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">0xardaeth</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">0xardaeth</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,888</td>
-        <td class="cell addresses">215</td>
-        <td class="cell threads">15</td>
-        <td class="cell comments">14</td>
-        <td class="cell upvotes">2</td>
-        <td class="cell cthreads">14</td>
+        <td class="cell xp" data-label="Aura">5,888</td>
+        <td class="cell addresses" data-label="Total coin created by users">215</td>
+        <td class="cell threads" data-label="Threads">16</td>
+        <td class="cell comments" data-label="Comments">15</td>
+        <td class="cell upvotes" data-label="Total Upvotes">2</td>
+        <td class="cell cthreads" data-label="Comment Threads">15</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">18</td>
-        <td class="cell id">515,773</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">18</td>
+        <td class="cell id" data-label="ID">515,773</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/9661fddf-8e4b-4a2d-84a6-0448aeafb716.png" alt="blacks" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">blacks</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">blacks</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,736</td>
-        <td class="cell addresses">197</td>
-        <td class="cell threads">8</td>
-        <td class="cell comments">7</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">7</td>
+        <td class="cell xp" data-label="Aura">5,736</td>
+        <td class="cell addresses" data-label="Total coin created by users">197</td>
+        <td class="cell threads" data-label="Threads">8</td>
+        <td class="cell comments" data-label="Comments">7</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">7</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">19</td>
-        <td class="cell id">515,783</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">19</td>
+        <td class="cell id" data-label="ID">515,783</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/e491c051-30c3-4ceb-82d9-abd75df52e2a.png" alt="proffer" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">proffer</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">proffer</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,709</td>
-        <td class="cell addresses">202</td>
-        <td class="cell threads">9</td>
-        <td class="cell comments">5</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">5</td>
+        <td class="cell xp" data-label="Aura">5,709</td>
+        <td class="cell addresses" data-label="Total coin created by users">202</td>
+        <td class="cell threads" data-label="Threads">9</td>
+        <td class="cell comments" data-label="Comments">5</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">5</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">20</td>
-        <td class="cell id">524,763</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">20</td>
+        <td class="cell id" data-label="ID">524,763</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/0afed5fa-bbfb-4b1f-98b9-ceefbb2878e5.jpg" alt="mehmetxh" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">mehmetxh</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">mehmetxh</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,486</td>
-        <td class="cell addresses">89</td>
-        <td class="cell threads">16</td>
-        <td class="cell comments">10</td>
-        <td class="cell upvotes">11</td>
-        <td class="cell cthreads">10</td>
+        <td class="cell xp" data-label="Aura">5,486</td>
+        <td class="cell addresses" data-label="Total coin created by users">89</td>
+        <td class="cell threads" data-label="Threads">16</td>
+        <td class="cell comments" data-label="Comments">10</td>
+        <td class="cell upvotes" data-label="Total Upvotes">11</td>
+        <td class="cell cthreads" data-label="Comment Threads">10</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">21</td>
-        <td class="cell id">526,398</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">21</td>
+        <td class="cell id" data-label="ID">526,398</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/6f59e73c-6057-4d9b-a312-a5fb1381f77d.jpg" alt="Deep8429" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Deep8429</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Deep8429</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,377</td>
-        <td class="cell addresses">210</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">6</td>
-        <td class="cell upvotes">1</td>
-        <td class="cell cthreads">6</td>
+        <td class="cell xp" data-label="Aura">5,377</td>
+        <td class="cell addresses" data-label="Total coin created by users">210</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">6</td>
+        <td class="cell upvotes" data-label="Total Upvotes">1</td>
+        <td class="cell cthreads" data-label="Comment Threads">6</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">22</td>
-        <td class="cell id">525,790</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">22</td>
+        <td class="cell id" data-label="ID">525,790</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/2255f74c-3f1e-4e70-8b06-69a5f430937d.png" alt="CollabWeb3" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">CollabWeb3</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">CollabWeb3</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,246</td>
-        <td class="cell addresses">234</td>
-        <td class="cell threads">34</td>
-        <td class="cell comments">7</td>
-        <td class="cell upvotes">15</td>
-        <td class="cell cthreads">7</td>
+        <td class="cell xp" data-label="Aura">5,246</td>
+        <td class="cell addresses" data-label="Total coin created by users">234</td>
+        <td class="cell threads" data-label="Threads">36</td>
+        <td class="cell comments" data-label="Comments">7</td>
+        <td class="cell upvotes" data-label="Total Upvotes">16</td>
+        <td class="cell cthreads" data-label="Comment Threads">7</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">23</td>
-        <td class="cell id">532,545</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">23</td>
+        <td class="cell id" data-label="ID">532,545</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/ea724049-12bb-47c2-88bc-7ff8f190a1dc.jpeg" alt="baross" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">baross</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">baross</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,135</td>
-        <td class="cell addresses">176</td>
-        <td class="cell threads">3</td>
-        <td class="cell comments">0</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">0</td>
+        <td class="cell xp" data-label="Aura">5,135</td>
+        <td class="cell addresses" data-label="Total coin created by users">176</td>
+        <td class="cell threads" data-label="Threads">3</td>
+        <td class="cell comments" data-label="Comments">0</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">0</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">24</td>
-        <td class="cell id">353,065</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">24</td>
+        <td class="cell id" data-label="ID">353,065</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="unqualifiedchangeling87" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">unqualifiedchangeling87</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">unqualifiedchangeling87</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">5,112</td>
-        <td class="cell addresses">33</td>
-        <td class="cell threads">24</td>
-        <td class="cell comments">12</td>
-        <td class="cell upvotes">53</td>
-        <td class="cell cthreads">12</td>
+        <td class="cell xp" data-label="Aura">5,112</td>
+        <td class="cell addresses" data-label="Total coin created by users">33</td>
+        <td class="cell threads" data-label="Threads">24</td>
+        <td class="cell comments" data-label="Comments">12</td>
+        <td class="cell upvotes" data-label="Total Upvotes">53</td>
+        <td class="cell cthreads" data-label="Comment Threads">12</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">25</td>
-        <td class="cell id">514,828</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">25</td>
+        <td class="cell id" data-label="ID">514,828</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/392287fc-cd87-4782-b0a0-7b599916de04.jpg" alt="BEŞİKTAŞLI13" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">BEŞİKTAŞLI13</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">BEŞİKTAŞLI13</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,963</td>
-        <td class="cell addresses">186</td>
-        <td class="cell threads">14</td>
-        <td class="cell comments">5</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">5</td>
+        <td class="cell xp" data-label="Aura">4,963</td>
+        <td class="cell addresses" data-label="Total coin created by users">186</td>
+        <td class="cell threads" data-label="Threads">14</td>
+        <td class="cell comments" data-label="Comments">5</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">5</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">26</td>
-        <td class="cell id">456,051</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">26</td>
+        <td class="cell id" data-label="ID">456,051</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/a80ad580-a8b5-4958-a369-dd963659f43a.png" alt="W00PS" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">W00PS</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">W00PS</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,771</td>
-        <td class="cell addresses">190</td>
-        <td class="cell threads">30</td>
-        <td class="cell comments">8</td>
-        <td class="cell upvotes">13</td>
-        <td class="cell cthreads">8</td>
+        <td class="cell xp" data-label="Aura">4,771</td>
+        <td class="cell addresses" data-label="Total coin created by users">190</td>
+        <td class="cell threads" data-label="Threads">30</td>
+        <td class="cell comments" data-label="Comments">8</td>
+        <td class="cell upvotes" data-label="Total Upvotes">13</td>
+        <td class="cell cthreads" data-label="Comment Threads">8</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">27</td>
-        <td class="cell id">347,019</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">27</td>
+        <td class="cell id" data-label="ID">347,019</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="balancedbrew17" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">balancedbrew17</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">balancedbrew17</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,655</td>
-        <td class="cell addresses">30</td>
-        <td class="cell threads">31</td>
-        <td class="cell comments">15</td>
-        <td class="cell upvotes">70</td>
-        <td class="cell cthreads">15</td>
+        <td class="cell xp" data-label="Aura">4,655</td>
+        <td class="cell addresses" data-label="Total coin created by users">30</td>
+        <td class="cell threads" data-label="Threads">31</td>
+        <td class="cell comments" data-label="Comments">15</td>
+        <td class="cell upvotes" data-label="Total Upvotes">70</td>
+        <td class="cell cthreads" data-label="Comment Threads">15</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">28</td>
-        <td class="cell id">345,077</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">28</td>
+        <td class="cell id" data-label="ID">345,077</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/f65cfc05-0e60-4b9f-b3bb-7fa39fc557a9.jpeg" alt="Crypto trend prediction 2025" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Crypto trend prediction 2025</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Crypto trend prediction 2025</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,650</td>
-        <td class="cell addresses">211</td>
-        <td class="cell threads">62</td>
-        <td class="cell comments">24</td>
-        <td class="cell upvotes">76</td>
-        <td class="cell cthreads">24</td>
+        <td class="cell xp" data-label="Aura">4,650</td>
+        <td class="cell addresses" data-label="Total coin created by users">211</td>
+        <td class="cell threads" data-label="Threads">62</td>
+        <td class="cell comments" data-label="Comments">24</td>
+        <td class="cell upvotes" data-label="Total Upvotes">76</td>
+        <td class="cell cthreads" data-label="Comment Threads">24</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">29</td>
-        <td class="cell id">347,047</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">29</td>
+        <td class="cell id" data-label="ID">347,047</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="shutteredreinterpretation29" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">shutteredreinterpretation29</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">shutteredreinterpretation29</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,558</td>
-        <td class="cell addresses">32</td>
-        <td class="cell threads">31</td>
-        <td class="cell comments">13</td>
-        <td class="cell upvotes">56</td>
-        <td class="cell cthreads">13</td>
+        <td class="cell xp" data-label="Aura">4,558</td>
+        <td class="cell addresses" data-label="Total coin created by users">32</td>
+        <td class="cell threads" data-label="Threads">31</td>
+        <td class="cell comments" data-label="Comments">13</td>
+        <td class="cell upvotes" data-label="Total Upvotes">56</td>
+        <td class="cell cthreads" data-label="Comment Threads">13</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">30</td>
-        <td class="cell id">532,600</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">30</td>
+        <td class="cell id" data-label="ID">532,600</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/e53bdc31-7354-4d8a-89d5-55e1161ab118.png" alt="asbojj" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">asbojj</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">asbojj</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,457</td>
-        <td class="cell addresses">189</td>
-        <td class="cell threads">8</td>
-        <td class="cell comments">1</td>
-        <td class="cell upvotes">6</td>
-        <td class="cell cthreads">1</td>
+        <td class="cell xp" data-label="Aura">4,457</td>
+        <td class="cell addresses" data-label="Total coin created by users">189</td>
+        <td class="cell threads" data-label="Threads">8</td>
+        <td class="cell comments" data-label="Comments">1</td>
+        <td class="cell upvotes" data-label="Total Upvotes">6</td>
+        <td class="cell cthreads" data-label="Comment Threads">1</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">31</td>
-        <td class="cell id">512,838</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">31</td>
+        <td class="cell id" data-label="ID">512,838</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
-            <img class="avatar" src="https://assets.commonwealth.im/0847e7f5-4d96-4406-8f30-c3082fa2f27c.png" alt="L.eth" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">L.eth</div>
+            <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/09a8eb20-4c6d-4992-89be-263deb33fa45.png" alt="L.eth" onerror="this.style.display='none'" />
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">L.eth</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,421</td>
-        <td class="cell addresses">208</td>
-        <td class="cell threads">8</td>
-        <td class="cell comments">18</td>
-        <td class="cell upvotes">42</td>
-        <td class="cell cthreads">18</td>
+        <td class="cell xp" data-label="Aura">4,421</td>
+        <td class="cell addresses" data-label="Total coin created by users">210</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">21</td>
+        <td class="cell upvotes" data-label="Total Upvotes">50</td>
+        <td class="cell cthreads" data-label="Comment Threads">21</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">32</td>
-        <td class="cell id">158,998</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">32</td>
+        <td class="cell id" data-label="ID">158,998</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/0847e7f5-4d96-4406-8f30-c3082fa2f27c.png" alt="sirius35" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">sirius35</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">sirius35</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,350</td>
-        <td class="cell addresses">200</td>
-        <td class="cell threads">25</td>
-        <td class="cell comments">20</td>
-        <td class="cell upvotes">1</td>
-        <td class="cell cthreads">20</td>
+        <td class="cell xp" data-label="Aura">4,350</td>
+        <td class="cell addresses" data-label="Total coin created by users">200</td>
+        <td class="cell threads" data-label="Threads">25</td>
+        <td class="cell comments" data-label="Comments">20</td>
+        <td class="cell upvotes" data-label="Total Upvotes">1</td>
+        <td class="cell cthreads" data-label="Comment Threads">20</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">33</td>
-        <td class="cell id">512,965</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">33</td>
+        <td class="cell id" data-label="ID">512,965</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/9f40b221-e2c7-4052-a7de-e580222baaa9.png" alt="magnetxyz" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">magnetxyz</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">magnetxyz</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,334</td>
-        <td class="cell addresses">183</td>
-        <td class="cell threads">22</td>
-        <td class="cell comments">8</td>
-        <td class="cell upvotes">3</td>
-        <td class="cell cthreads">8</td>
+        <td class="cell xp" data-label="Aura">4,334</td>
+        <td class="cell addresses" data-label="Total coin created by users">183</td>
+        <td class="cell threads" data-label="Threads">22</td>
+        <td class="cell comments" data-label="Comments">8</td>
+        <td class="cell upvotes" data-label="Total Upvotes">3</td>
+        <td class="cell cthreads" data-label="Comment Threads">8</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">34</td>
-        <td class="cell id">531,759</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">34</td>
+        <td class="cell id" data-label="ID">531,759</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/181e25ad-ce08-427d-8d3a-d290af3be44b.png" alt="0xdiren" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">0xdiren</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">0xdiren</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,282</td>
-        <td class="cell addresses">167</td>
-        <td class="cell threads">12</td>
-        <td class="cell comments">2</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">2</td>
+        <td class="cell xp" data-label="Aura">4,282</td>
+        <td class="cell addresses" data-label="Total coin created by users">167</td>
+        <td class="cell threads" data-label="Threads">12</td>
+        <td class="cell comments" data-label="Comments">2</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">2</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">35</td>
-        <td class="cell id">347,040</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">35</td>
+        <td class="cell id" data-label="ID">347,040</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="imprecisekidnapping17" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">imprecisekidnapping17</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">imprecisekidnapping17</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,264</td>
-        <td class="cell addresses">31</td>
-        <td class="cell threads">31</td>
-        <td class="cell comments">18</td>
-        <td class="cell upvotes">61</td>
-        <td class="cell cthreads">18</td>
+        <td class="cell xp" data-label="Aura">4,264</td>
+        <td class="cell addresses" data-label="Total coin created by users">31</td>
+        <td class="cell threads" data-label="Threads">31</td>
+        <td class="cell comments" data-label="Comments">18</td>
+        <td class="cell upvotes" data-label="Total Upvotes">61</td>
+        <td class="cell cthreads" data-label="Comment Threads">18</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">36</td>
-        <td class="cell id">526,144</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">36</td>
+        <td class="cell id" data-label="ID">526,144</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/181e25ad-ce08-427d-8d3a-d290af3be44b.png" alt="BERKGMS" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">BERKGMS</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">BERKGMS</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,250</td>
-        <td class="cell addresses">129</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">10</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">10</td>
+        <td class="cell xp" data-label="Aura">4,250</td>
+        <td class="cell addresses" data-label="Total coin created by users">129</td>
+        <td class="cell threads" data-label="Threads">11</td>
+        <td class="cell comments" data-label="Comments">10</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">10</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">37</td>
-        <td class="cell id">81,530</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">37</td>
+        <td class="cell id" data-label="ID">81,530</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/e70f1857-6ccf-4877-9e39-76bc919d9d78.png" alt="Zorg" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Zorg</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Zorg</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,194</td>
-        <td class="cell addresses">187</td>
-        <td class="cell threads">19</td>
-        <td class="cell comments">6</td>
-        <td class="cell upvotes">48</td>
-        <td class="cell cthreads">6</td>
+        <td class="cell xp" data-label="Aura">4,194</td>
+        <td class="cell addresses" data-label="Total coin created by users">187</td>
+        <td class="cell threads" data-label="Threads">19</td>
+        <td class="cell comments" data-label="Comments">6</td>
+        <td class="cell upvotes" data-label="Total Upvotes">48</td>
+        <td class="cell cthreads" data-label="Comment Threads">6</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">38</td>
-        <td class="cell id">512,542</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">38</td>
+        <td class="cell id" data-label="ID">512,542</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/120c73eb-8af5-4c77-9bed-a7c898cc72fc.jpg" alt="0xTingoo" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">0xTingoo</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">0xTingoo</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,156</td>
-        <td class="cell addresses">130</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">5</td>
-        <td class="cell upvotes">2</td>
-        <td class="cell cthreads">5</td>
+        <td class="cell xp" data-label="Aura">4,156</td>
+        <td class="cell addresses" data-label="Total coin created by users">130</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">5</td>
+        <td class="cell upvotes" data-label="Total Upvotes">2</td>
+        <td class="cell cthreads" data-label="Comment Threads">5</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">39</td>
-        <td class="cell id">518,763</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">39</td>
+        <td class="cell id" data-label="ID">518,763</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/66af838e-303a-4a1b-813e-cad7199af854.png" alt="bat111" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">bat111</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">bat111</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,068</td>
-        <td class="cell addresses">153</td>
-        <td class="cell threads">13</td>
-        <td class="cell comments">4</td>
-        <td class="cell upvotes">5</td>
-        <td class="cell cthreads">4</td>
+        <td class="cell xp" data-label="Aura">4,068</td>
+        <td class="cell addresses" data-label="Total coin created by users">153</td>
+        <td class="cell threads" data-label="Threads">13</td>
+        <td class="cell comments" data-label="Comments">4</td>
+        <td class="cell upvotes" data-label="Total Upvotes">5</td>
+        <td class="cell cthreads" data-label="Comment Threads">4</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">40</td>
-        <td class="cell id">512,478</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">40</td>
+        <td class="cell id" data-label="ID">512,478</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/0d4475c4-7421-4c2b-b36c-32d7b5159d97.png" alt="tantana332" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">tantana332</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">tantana332</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,056</td>
-        <td class="cell addresses">166</td>
-        <td class="cell threads">21</td>
-        <td class="cell comments">6</td>
-        <td class="cell upvotes">12</td>
-        <td class="cell cthreads">6</td>
+        <td class="cell xp" data-label="Aura">4,056</td>
+        <td class="cell addresses" data-label="Total coin created by users">166</td>
+        <td class="cell threads" data-label="Threads">18</td>
+        <td class="cell comments" data-label="Comments">5</td>
+        <td class="cell upvotes" data-label="Total Upvotes">11</td>
+        <td class="cell cthreads" data-label="Comment Threads">5</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">41</td>
-        <td class="cell id">532,564</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">41</td>
+        <td class="cell id" data-label="ID">532,564</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/7e3167a0-49ff-4b49-bc2e-68ec00edd44d.png" alt="nvrzrcv" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">nvrzrcv</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">nvrzrcv</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,031</td>
-        <td class="cell addresses">130</td>
-        <td class="cell threads">2</td>
-        <td class="cell comments">0</td>
-        <td class="cell upvotes">1</td>
-        <td class="cell cthreads">0</td>
+        <td class="cell xp" data-label="Aura">4,031</td>
+        <td class="cell addresses" data-label="Total coin created by users">130</td>
+        <td class="cell threads" data-label="Threads">2</td>
+        <td class="cell comments" data-label="Comments">0</td>
+        <td class="cell upvotes" data-label="Total Upvotes">1</td>
+        <td class="cell cthreads" data-label="Comment Threads">0</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">42</td>
-        <td class="cell id">517,134</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">42</td>
+        <td class="cell id" data-label="ID">517,134</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/958ad1dc-aacd-406c-9a85-34091b49e9f9.png" alt="BlastAway" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">BlastAway</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">BlastAway</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">4,004</td>
-        <td class="cell addresses">165</td>
-        <td class="cell threads">10</td>
-        <td class="cell comments">13</td>
-        <td class="cell upvotes">18</td>
-        <td class="cell cthreads">13</td>
+        <td class="cell xp" data-label="Aura">4,004</td>
+        <td class="cell addresses" data-label="Total coin created by users">165</td>
+        <td class="cell threads" data-label="Threads">10</td>
+        <td class="cell comments" data-label="Comments">13</td>
+        <td class="cell upvotes" data-label="Total Upvotes">18</td>
+        <td class="cell cthreads" data-label="Comment Threads">13</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">43</td>
-        <td class="cell id">519,190</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">43</td>
+        <td class="cell id" data-label="ID">519,190</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/5b7ed1f3-4151-454b-9870-ab26e0141df8.png" alt="0xzeynel" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">0xzeynel</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">0xzeynel</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,961</td>
-        <td class="cell addresses">156</td>
-        <td class="cell threads">35</td>
-        <td class="cell comments">20</td>
-        <td class="cell upvotes">3</td>
-        <td class="cell cthreads">20</td>
+        <td class="cell xp" data-label="Aura">3,961</td>
+        <td class="cell addresses" data-label="Total coin created by users">156</td>
+        <td class="cell threads" data-label="Threads">36</td>
+        <td class="cell comments" data-label="Comments">25</td>
+        <td class="cell upvotes" data-label="Total Upvotes">8</td>
+        <td class="cell cthreads" data-label="Comment Threads">25</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">44</td>
-        <td class="cell id">387,295</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">44</td>
+        <td class="cell id" data-label="ID">387,295</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/ffb02108-3761-4625-93fa-5795e2deea89.jpg" alt="Emil mehdiyev" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Emil mehdiyev</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Emil mehdiyev</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,842</td>
-        <td class="cell addresses">151</td>
-        <td class="cell threads">8</td>
-        <td class="cell comments">4</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">4</td>
+        <td class="cell xp" data-label="Aura">3,842</td>
+        <td class="cell addresses" data-label="Total coin created by users">151</td>
+        <td class="cell threads" data-label="Threads">8</td>
+        <td class="cell comments" data-label="Comments">4</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">4</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">45</td>
-        <td class="cell id">372,738</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">45</td>
+        <td class="cell id" data-label="ID">372,738</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="supportivehemlock81" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">supportivehemlock81</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">supportivehemlock81</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,835</td>
-        <td class="cell addresses">33</td>
-        <td class="cell threads">22</td>
-        <td class="cell comments">5</td>
-        <td class="cell upvotes">26</td>
-        <td class="cell cthreads">5</td>
+        <td class="cell xp" data-label="Aura">3,835</td>
+        <td class="cell addresses" data-label="Total coin created by users">33</td>
+        <td class="cell threads" data-label="Threads">22</td>
+        <td class="cell comments" data-label="Comments">5</td>
+        <td class="cell upvotes" data-label="Total Upvotes">26</td>
+        <td class="cell cthreads" data-label="Comment Threads">5</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">46</td>
-        <td class="cell id">372,744</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">46</td>
+        <td class="cell id" data-label="ID">372,744</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://assets.commonwealth.im/ef919936-8554-42e5-8590-118e8cb68101.png" alt="well-educatedheaven56" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">well-educatedheaven56</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">well-educatedheaven56</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,828</td>
-        <td class="cell addresses">36</td>
-        <td class="cell threads">24</td>
-        <td class="cell comments">8</td>
-        <td class="cell upvotes">24</td>
-        <td class="cell cthreads">8</td>
+        <td class="cell xp" data-label="Aura">3,828</td>
+        <td class="cell addresses" data-label="Total coin created by users">36</td>
+        <td class="cell threads" data-label="Threads">24</td>
+        <td class="cell comments" data-label="Comments">8</td>
+        <td class="cell upvotes" data-label="Total Upvotes">24</td>
+        <td class="cell cthreads" data-label="Comment Threads">8</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">47</td>
-        <td class="cell id">1,139,898</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">47</td>
+        <td class="cell id" data-label="ID">1,139,898</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/2427738c-0c82-49ad-b156-f97bad18e262.jpg" alt="PASAU21" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">PASAU21</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">PASAU21</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,823</td>
-        <td class="cell addresses">144</td>
-        <td class="cell threads">6</td>
-        <td class="cell comments">3</td>
-        <td class="cell upvotes">0</td>
-        <td class="cell cthreads">3</td>
+        <td class="cell xp" data-label="Aura">3,823</td>
+        <td class="cell addresses" data-label="Total coin created by users">144</td>
+        <td class="cell threads" data-label="Threads">7</td>
+        <td class="cell comments" data-label="Comments">5</td>
+        <td class="cell upvotes" data-label="Total Upvotes">0</td>
+        <td class="cell cthreads" data-label="Comment Threads">5</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">48</td>
-        <td class="cell id">521,615</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">48</td>
+        <td class="cell id" data-label="ID">521,615</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/d70dc130-2d49-4345-a9ec-fc6d890876e5.png" alt="klise" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">klise</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">klise</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,818</td>
-        <td class="cell addresses">157</td>
-        <td class="cell threads">11</td>
-        <td class="cell comments">3</td>
-        <td class="cell upvotes">1</td>
-        <td class="cell cthreads">3</td>
+        <td class="cell xp" data-label="Aura">3,818</td>
+        <td class="cell addresses" data-label="Total coin created by users">157</td>
+        <td class="cell threads" data-label="Threads">13</td>
+        <td class="cell comments" data-label="Comments">4</td>
+        <td class="cell upvotes" data-label="Total Upvotes">2</td>
+        <td class="cell cthreads" data-label="Comment Threads">4</td>
+        <td class="cell lholder" data-label="Lamumu holder">✓</td>
       </tr>
       <tr>
-        <td class="cell rank">49</td>
-        <td class="cell id">518,137</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">49</td>
+        <td class="cell id" data-label="ID">518,137</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/f5c04605-9514-49a6-a104-b88f149cc8c9.jpg" alt="Sercan0x" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">Sercan0x</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">Sercan0x</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,772</td>
-        <td class="cell addresses">149</td>
-        <td class="cell threads">20</td>
-        <td class="cell comments">3</td>
-        <td class="cell upvotes">3</td>
-        <td class="cell cthreads">3</td>
+        <td class="cell xp" data-label="Aura">3,772</td>
+        <td class="cell addresses" data-label="Total coin created by users">149</td>
+        <td class="cell threads" data-label="Threads">21</td>
+        <td class="cell comments" data-label="Comments">3</td>
+        <td class="cell upvotes" data-label="Total Upvotes">3</td>
+        <td class="cell cthreads" data-label="Comment Threads">3</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
       <tr>
-        <td class="cell rank">50</td>
-        <td class="cell id">362,505</td>
-        <td class="cell user">
+        <td class="cell rank" data-label="Rank">50</td>
+        <td class="cell id" data-label="ID">362,505</td>
+        <td class="cell user" data-label="User">
           <div class="userbox">
             <img class="avatar" src="https://s3.us-east-1.amazonaws.com/assets.commonwealth.im/7f01779b-4b0a-424d-a9ec-9b992640653f.jpg" alt="DABID" onerror="this.style.display='none'" />
-            <div class="meta">
-              <div class="name">DABID</div>
+            <div class="meta" style="min-width:0">
+              <div class="name" style="word-break:break-word; overflow-wrap:anywhere">DABID</div>
             </div>
           </div>
         </td>
-        <td class="cell xp">3,706</td>
-        <td class="cell addresses">150</td>
-        <td class="cell threads">7</td>
-        <td class="cell comments">3</td>
-        <td class="cell upvotes">5</td>
-        <td class="cell cthreads">3</td>
+        <td class="cell xp" data-label="Aura">3,706</td>
+        <td class="cell addresses" data-label="Total coin created by users">150</td>
+        <td class="cell threads" data-label="Threads">7</td>
+        <td class="cell comments" data-label="Comments">3</td>
+        <td class="cell upvotes" data-label="Total Upvotes">5</td>
+        <td class="cell cthreads" data-label="Comment Threads">3</td>
+        <td class="cell lholder" data-label="Lamumu holder"></td>
       </tr>
         </tbody>
       </table>
+      </div>
       <div class="pager">
         
-        <span>Page 1 / 787</span>
+        <span>Page 1 / 1,093</span>
         <a href="/users-html?page=2&limit=50&sortBy=xp&order=desc&onlyOk=true">Next</a>
       </div>
     </div>
