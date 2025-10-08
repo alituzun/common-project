@@ -2287,7 +2287,7 @@ app.get('/xps-ranked/summary-html', async (req, res) => {
     <span class="sep">•</span>
   <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
   </div>
-  <div class="meta">Data as of 27.09.2025</div>
+  <div class="meta">Data as of 8.10.2025</div>
   <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
@@ -2546,7 +2546,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
         <span class="sep">•</span>
         <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
       </div>
-  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 27.09.2025</div>
+  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 8.10.2025</div>
   <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
@@ -2782,7 +2782,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
         <span class="sep">•</span>
         <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
       </div>
-      <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 27.09.2025</div>
+  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 8.10.2025</div>
       <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
