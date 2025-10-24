@@ -9,6 +9,8 @@ import { getSupabase } from './supabaseClient.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// OpenSea API key must be provided via environment (OPENSEA_API_KEY). No hardcoded fallback in production.
+
 // Basic CORS (adjust as needed). Allows common headers and credentials if needed.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,14 +22,150 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+// Helper: require admin token in production
+function requireAdminInProd(req, res) {
+  const isProd = (process.env.VERCEL || process.env.NODE_ENV === 'production');
+  if (!isProd) return true;
+  const token = req.headers['x-admin-token'];
+  if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
+    res.status(401).json({ ok: false, error: 'Unauthorized: missing or invalid X-Admin-Token' });
+    return false;
+  }
+  return true;
+}
+
+// Simple Sybil game endpoints
+// GET /api/games/sybil/start -> starts a session (stateless placeholder)
+app.get('/api/games/sybil/start', (req, res) => {
+  try {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    const now = new Date().toISOString();
+    const phase = { phase1: 0.5, phase2: 0.5 };
+    return res.status(200).json({ ok: true, game: 'sybil', action: 'start', phase, ip, startedAt: now });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
+// GET /xps-ranked/sync-tiers
+// Reads output/concat.json (or ?file=) and updates user_profile_stats.tier for each user_id found.
+// Security: require X-Admin-Token header to match process.env.ADMIN_TOKEN in production.
+app.get('/xps-ranked/sync-tiers', async (req, res) => {
+  try {
+    const adminToken = req.headers['x-admin-token'];
+    const isProd = (process.env.VERCEL || process.env.NODE_ENV === 'production');
+    if (isProd) {
+      if (!process.env.ADMIN_TOKEN || adminToken !== process.env.ADMIN_TOKEN) {
+        return res.status(401).json({ ok: false, error: 'Unauthorized: missing or invalid X-Admin-Token' });
+      }
+    }
+
+    const filePath = req.query.file ? String(req.query.file) : path.join(process.cwd(), 'output', 'concat.json');
+    const dryRun = String(req.query.dryRun ?? 'false').toLowerCase() === 'true';
+
+    async function readJsonSafe(file) {
+      try {
+        const txt = await fs.readFile(file, 'utf8');
+        return JSON.parse(txt);
+      } catch (e) {
+        return undefined;
+      }
+    }
+    const data = await readJsonSafe(filePath);
+    if (!data) return res.status(400).json({ ok: false, error: 'Could not read or parse JSON file', filePath });
+
+    const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
+    if (!Array.isArray(arr) || arr.length === 0) return res.json({ ok: true, filePath, totalItems: 0, uniqueUsers: 0, updated: 0, skipped: 0, dryRun });
+
+    // Build per-user tier frequency and choose the most frequent tier
+    const tierCountsByUser = new Map(); // userId:number -> Map(tier:number -> count)
+    let itemsScanned = 0;
+    for (const item of arr) {
+      if (!item || typeof item !== 'object') continue;
+      const idInfo = getIdFromObject(item, 'user_id');
+      if (!idInfo) continue;
+      const uidNum = Number(idInfo.value);
+      if (!Number.isFinite(uidNum) || uidNum <= 0) continue;
+      const t = toNumber(item.tier);
+      if (!Number.isFinite(t)) continue;
+      const ti = Math.trunc(t);
+      if (!tierCountsByUser.has(uidNum)) tierCountsByUser.set(uidNum, new Map());
+      const m = tierCountsByUser.get(uidNum);
+      m.set(ti, (m.get(ti) || 0) + 1);
+      itemsScanned++;
+    }
+
+    // Decide final tier per user: most frequent; tie-breaker -> largest tier number
+    const finalTierByUser = new Map();
+    for (const [uid, m] of tierCountsByUser.entries()) {
+      let bestTier = null;
+      let bestCount = -1;
+      for (const [tierVal, cnt] of m.entries()) {
+        if (cnt > bestCount || (cnt === bestCount && tierVal > (bestTier ?? -Infinity))) {
+          bestTier = tierVal;
+          bestCount = cnt;
+        }
+      }
+      if (bestTier != null) finalTierByUser.set(uid, bestTier);
+    }
+
+    const sb = getSupabase();
+    let updated = 0;
+    let failed = 0;
+    const errors = [];
+
+    async function updateOne(uid, tier) {
+      try {
+        if (dryRun) return true;
+        const r = await sb.from('user_profile_stats').update({ tier }).eq('user_id', uid);
+        if (r.error) throw new Error(r.error.message || 'Supabase update error');
+        return true;
+      } catch (e) {
+        errors.push({ uid, tier, error: e?.message || String(e) });
+        return false;
+      }
+    }
+
+    // Concurrency control
+    const entries = Array.from(finalTierByUser.entries());
+    const concurrency = Number(req.query.concurrency ?? 10);
+    let i = 0;
+    async function nextBatch() {
+      const batch = [];
+      for (let k = 0; k < concurrency && i < entries.length; k++, i++) {
+        const [uid, tier] = entries[i];
+        batch.push(updateOne(uid, tier).then((ok) => { if (ok) updated++; else failed++; }));
+      }
+      await Promise.all(batch);
+      if (i < entries.length) await nextBatch();
+    }
+    await nextBatch();
+
+    return res.json({
+      ok: true,
+      filePath,
+      dryRun,
+      totalItems: arr.length,
+      itemsWithTier: itemsScanned,
+      uniqueUsers: finalTierByUser.size,
+      updated,
+      failed,
+      errorsSample: errors.slice(0, 10),
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
 // Helper: sanitize and prepare headers for upstream call
 function buildUpstreamHeaders(reqHeaders) {
-  const drop = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive', 'upgrade', 'via']);
-  const h = {};
+  const drop = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive', 'upgrade', 'via', 'x-forwarded-for']);
+  const h = {}; 
   for (const [k, v] of Object.entries(reqHeaders || {})) {
     const key = String(k).toLowerCase();
     if (!drop.has(key) && v !== undefined && v !== null) h[key] = v;
   }
+  //
   // Provide some sensible defaults if caller didn't set them
   h['accept'] ||= 'application/json, text/plain, */*';
   h['accept-encoding'] ||= 'gzip, deflate, br, zstd';
@@ -37,6 +175,22 @@ function buildUpstreamHeaders(reqHeaders) {
   h['referer'] ||= 'https://common.xyz/leaderboard';
   return h;
 }
+
+// Common Checker helpers (top-level)
+const parsePct = (val, defVal) => {
+  if (val == null) return defVal;
+  const n = Number(String(val).replace(/[^0-9.+-]/g, ''));
+  return Number.isFinite(n) ? n : defVal;
+};
+const fmtPct = (x) => (typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%' : '—');
+const filterUserMsgs = (arr) => {
+  const HIDE = [
+    /^(no )?common credentials/i,
+    /^common api error/i,
+    /^no wallet address found/i,
+  ];
+  return (Array.isArray(arr) ? arr : []).filter((m) => !HIDE.some((rx) => rx.test(String(m))));
+};
 
 // Simple in-memory rate limiting (best-effort; resets per process)
 const RATE_LIMITS = {
@@ -98,7 +252,7 @@ app.get('/xps-ranked/save', async (req, res) => {
       return res.status(400).json({ error: 'Missing credentials: provide Authorization and/or Cookie (header or query param)' });
     }
 
-    const limit = Number(req.query.limit ?? 50) || 50;
+    const limit = Number(req.query.limit ?? 50) || 50; // Default limit for pagination
     const direction = String(req.query.direction ?? 'forward');
     const cursorRaw = req.query.cursor;
 
@@ -154,10 +308,13 @@ app.get('/xps-ranked/save-all', async (req, res) => {
       return res.status(400).json({ error: 'Missing credentials: provide Authorization and/or Cookie (header or query param)' });
     }
 
-    const start = Number(req.query.start ?? 1) || 1;
+    const start = Number(req.query.start ?? 1) || 1; // Starting cursor for pagination
     const limit = Number(req.query.limit ?? 50) || 50;
     const direction = String(req.query.direction ?? 'forward');
-    const max = Math.min(Number(req.query.max ?? 1000) || 1000, 10000); // hard cap
+  // Increase default page scan and hard cap; allow overrides via env or query
+  const maxDefault = Number(process.env.SAVE_ALL_MAX_DEFAULT ?? 5000) || 5000; // previous default was 1000
+  const hardCap = Math.max(1000, Number(process.env.SAVE_ALL_HARD_CAP ?? 100000) || 100000); // previous cap was 10000
+  const max = Math.min(Number(req.query.max ?? maxDefault) || maxDefault, hardCap);
     const delayMs = Math.max(0, Number(req.query.delayMs ?? 0) || 0);
     const stopOnEmpty = String(req.query.stopOnEmpty ?? 'true').toLowerCase() !== 'false';
 
@@ -767,17 +924,17 @@ app.get('/xps-ranked/profile-xp', async (req, res) => {
 
     const jsonFile = req.query.jsonFile ? String(req.query.jsonFile) : path.join(process.cwd(), 'output', 'concat.json');
     const idKey = req.query.idKey ? String(req.query.idKey) : 'user_id';
-  const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
     const offset = Number(req.query.offset ?? 0) || 0;
-  const concurrency = Math.max(1, Number(req.query.concurrency ?? 2) || 2);
-  const delayMs = Math.max(0, Number(req.query.delayMs ?? 250) || 250);
-  const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'profile-xp.json');
-  const maxRetries = Math.max(0, Number(req.query.maxRetries ?? 4) || 4);
-  const baseDelayMs = Math.max(50, Number(req.query.baseDelayMs ?? 500) || 500);
-  const skipExisting = String(req.query.skipExisting ?? 'true').toLowerCase() !== 'false';
-  const outMode = (req.query.outMode ? String(req.query.outMode) : 'merge').toLowerCase(); // overwrite | merge
-  const backfill = String(req.query.backfill ?? 'true').toLowerCase() !== 'false';
-  const mutateSource = String(req.query.mutateSource ?? 'false').toLowerCase() === 'true';
+    const concurrency = Math.max(1, Number(req.query.concurrency ?? 2) || 2);
+    const delayMs = Math.max(0, Number(req.query.delayMs ?? 250) || 250);
+    const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'profile-xp.json');
+    const maxRetries = Math.max(0, Number(req.query.maxRetries ?? 4) || 4);
+    const baseDelayMs = Math.max(50, Number(req.query.baseDelayMs ?? 500) || 500);
+    const skipExisting = String(req.query.skipExisting ?? 'true').toLowerCase() !== 'false';
+    const outMode = (req.query.outMode ? String(req.query.outMode) : 'merge').toLowerCase(); // overwrite | merge
+    const backfill = String(req.query.backfill ?? 'true').toLowerCase() !== 'false';
+    const mutateSource = String(req.query.mutateSource ?? 'false').toLowerCase() === 'true';
 
     const text = await fs.readFile(jsonFile, 'utf8');
     const arr = JSON.parse(text);
@@ -834,9 +991,9 @@ app.get('/xps-ranked/profile-xp', async (req, res) => {
       slice = skipExisting ? sliceRaw.filter((id) => !processedIds.has(id)) : sliceRaw;
     }
 
-  const headersOut = buildUpstreamHeaders(req.headers);
-  if (auth) headersOut['authorization'] = auth;
-  if (cookie) headersOut['cookie'] = cookie;
+    const headersOut = buildUpstreamHeaders(req.headers);
+    if (auth) headersOut['authorization'] = auth;
+    if (cookie) headersOut['cookie'] = cookie;
 
     const results = [];
     const errors = [];
@@ -914,7 +1071,7 @@ app.get('/xps-ranked/profile-xp', async (req, res) => {
     });
     await Promise.all(workers);
 
-  // Persist results (merge or overwrite)
+    // Persist results (merge or overwrite)
     await fs.mkdir(path.dirname(outFile), { recursive: true });
     if (outMode === 'merge' && existing && Array.isArray(existing.results)) {
       const byId = new Map();
@@ -952,7 +1109,7 @@ app.get('/xps-ranked/profile-xp', async (req, res) => {
             if (!Number.isFinite(num)) { filtered.push(item); continue; }
             if (toRemove.has(num)) {
               removedFromSource++;
-              continue; // drop it
+              continue;
             }
             filtered.push(item);
           }
@@ -964,178 +1121,6 @@ app.get('/xps-ranked/profile-xp', async (req, res) => {
     return res.json({ ok: true, requested: slice.length, completed, successes: results.length - errors.length, failures: errors.length, skipped: Math.max(0, (limit ?? (ids.length - offset)) - slice.length), retries: totalRetries, outFile, outMode, skipExisting, backfill, mutateSource, removedFromSource });
   } catch (err) {
     return res.status(500).json({ error: 'Profile XP fetch failure', message: err?.message || String(err) });
-  }
-});
-
-// GET /xps-ranked/profile-xp-runall
-// Processes ALL IDs from concat.json with dynamic throttling and periodic writes.
-// Auto-resumes from existing output/profile-xp.json; supports mutateSource to shrink concat.json.
-// Query: jsonFile, idKey, outFile, concurrency (default 2), targetRps (default 1), flushEvery (default 100),
-//        baseDelayMs (default 500), maxRetries (default 6), mutateSource=false|true
-app.get('/xps-ranked/profile-xp-runall', async (req, res) => {
-  try {
-    const { authorization: auth, cookie } = getAuthCookieFromRequest(req);
-    if (!auth && !cookie) {
-      return res.status(400).json({ error: 'Missing credentials: provide Authorization and/or Cookie (header or query param)' });
-    }
-
-    const jsonFile = req.query.jsonFile ? String(req.query.jsonFile) : path.join(process.cwd(), 'output', 'concat.json');
-    const idKey = req.query.idKey ? String(req.query.idKey) : 'user_id';
-    const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'profile-xp.json');
-    const concurrency = Math.max(1, Number(req.query.concurrency ?? 2) || 2);
-    const targetRps = Math.max(0.2, Number(req.query.targetRps ?? 1) || 1); // requests per second total
-    const flushEvery = Math.max(10, Number(req.query.flushEvery ?? 100) || 100);
-    const baseDelayMs = Math.max(100, Number(req.query.baseDelayMs ?? 500) || 500);
-    const maxRetries = Math.max(0, Number(req.query.maxRetries ?? 6) || 6);
-    const mutateSource = String(req.query.mutateSource ?? 'false').toLowerCase() === 'true';
-
-    const text = await fs.readFile(jsonFile, 'utf8');
-    const arr = JSON.parse(text);
-    if (!Array.isArray(arr)) return res.status(400).json({ error: 'Invalid JSON: expected top-level array' });
-
-    // Build unique ID list
-    const seen = new Set();
-    const allIds = [];
-    for (const item of arr) {
-      if (!item || typeof item !== 'object') continue;
-      const idInfo = getIdFromObject(item, idKey);
-      if (!idInfo) continue;
-      const num = Number(idInfo.value);
-      if (!Number.isFinite(num) || num <= 0) continue;
-      if (!seen.has(num)) { seen.add(num); allIds.push(num); }
-    }
-
-    // Load existing output to resume
-    let existing = undefined;
-    const doneIds = new Set();
-    try {
-      const prev = JSON.parse(await fs.readFile(outFile, 'utf8'));
-      existing = prev;
-      if (Array.isArray(prev?.results)) {
-        for (const r of prev.results) {
-          if (r && (r.userId !== undefined && r.userId !== null)) doneIds.add(Number(r.userId));
-        }
-      }
-    } catch {}
-
-    const queue = allIds.filter((id) => !doneIds.has(id));
-    const headersOut = buildUpstreamHeaders(req.headers);
-    if (auth) headersOut['authorization'] = auth;
-    if (cookie) headersOut['cookie'] = cookie;
-
-    // Timing control for targetRps
-    let lastRequestTs = 0;
-    const minInterval = 1000 / Math.max(0.1, targetRps);
-
-    async function throttle() {
-      const now = Date.now();
-      const elapsed = now - lastRequestTs;
-      if (elapsed < minInterval) await wait(minInterval - elapsed);
-      lastRequestTs = Date.now();
-    }
-
-    async function fetchWithRetries(url) {
-      let attempt = 0;
-      while (true) {
-        await throttle();
-        try {
-          const resp = await fetch(url, { method: 'GET', headers: headersOut });
-          if (resp.status === 429 || resp.status === 503) {
-            if (attempt >= maxRetries) return { resp };
-            const ra = resp.headers.get('retry-after');
-            let waitMs = baseDelayMs * Math.pow(2, attempt);
-            if (ra) {
-              const raNum = Number(ra);
-              if (Number.isFinite(raNum)) waitMs = Math.max(waitMs, raNum * 1000);
-            }
-            await wait(waitMs);
-            attempt++;
-            continue;
-          }
-          return { resp };
-        } catch (e) {
-          if (attempt >= maxRetries) return { error: e };
-          await wait(baseDelayMs * Math.pow(2, attempt));
-          attempt++;
-        }
-      }
-    }
-
-    const results = existing && Array.isArray(existing.results) ? existing.results.slice() : [];
-    const errors = existing && Array.isArray(existing.errors) ? existing.errors.slice() : [];
-    let completed = existing?.completed || 0;
-    let processedSinceFlush = 0;
-
-    async function processOne(userId) {
-      const inputParam = JSON.stringify({ userId });
-      const url = 'https://common.xyz/api/internal/trpc/user.getUserProfile?input=' + encodeURIComponent(inputParam);
-      const { resp, error } = await fetchWithRetries(url);
-      if (error) {
-        errors.push({ userId, error: error?.message || String(error) });
-        completed++;
-        processedSinceFlush++;
-        return;
-      }
-      const bodyText = await resp.text();
-      let xp = undefined;
-      try {
-        const json = JSON.parse(bodyText);
-        xp = findMaxXpPoints(json);
-      } catch {}
-      results.push({ userId, status: resp.status, ok: resp.ok, xp_points: xp ?? null });
-      if (!resp.ok) {
-        errors.push({ userId, status: resp.status, bodySample: bodyText.slice(0, 500) });
-      }
-      completed++;
-      processedSinceFlush++;
-    }
-
-    async function flushIfNeeded(force = false) {
-      if (!force && processedSinceFlush < flushEvery) return;
-      await fs.mkdir(path.dirname(outFile), { recursive: true });
-      const payload = { total: results.length + errors.length, completed, results, errors };
-      await fs.writeFile(outFile, JSON.stringify(payload, null, 2), 'utf8');
-      processedSinceFlush = 0;
-    }
-
-    // Workers
-    const workers = Array.from({ length: Math.min(concurrency, queue.length || 0) }, async () => {
-      while (true) {
-        const id = queue.shift();
-        if (id === undefined) break;
-        await processOne(id);
-        await flushIfNeeded(false);
-      }
-    });
-    await Promise.all(workers);
-    await flushIfNeeded(true);
-
-    // Optionally remove processed IDs from concat.json
-    let removedFromSource = 0;
-    if (mutateSource) {
-      try {
-        const srcText = await fs.readFile(jsonFile, 'utf8');
-        const srcArr = JSON.parse(srcText);
-        if (Array.isArray(srcArr)) {
-          const doneNow = new Set(results.map((r) => Number(r.userId)));
-          const filtered = [];
-          for (const item of srcArr) {
-            if (!item || typeof item !== 'object') { filtered.push(item); continue; }
-            const idInfo = getIdFromObject(item, idKey);
-            if (!idInfo) { filtered.push(item); continue; }
-            const num = Number(idInfo.value);
-            if (!Number.isFinite(num)) { filtered.push(item); continue; }
-            if (doneNow.has(num)) { removedFromSource++; continue; }
-            filtered.push(item);
-          }
-          await fs.writeFile(jsonFile, JSON.stringify(filtered, null, 2), 'utf8');
-        }
-      } catch {}
-    }
-
-    return res.json({ ok: true, processed: completed, remaining: queue.length, results: results.length, errors: errors.length, outFile, removedFromSource });
-  } catch (err) {
-    return res.status(500).json({ error: 'Profile XP runall failure', message: err?.message || String(err) });
   }
 });
 
@@ -1154,7 +1139,8 @@ app.get('/xps-ranked/profile-activity-runall', async (req, res) => {
 
     const jsonFile = req.query.jsonFile ? String(req.query.jsonFile) : path.join(process.cwd(), 'output', 'concat.json');
     const idKey = req.query.idKey ? String(req.query.idKey) : 'user_id';
-    const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'profile-activity.json');
+  const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'profile-activity.json');
+  const skipExisting = String(req.query.skipExisting ?? 'true').toLowerCase() !== 'false';
     const concurrency = Math.max(1, Number(req.query.concurrency ?? 2) || 2);
     const targetRps = Math.max(0.2, Number(req.query.targetRps ?? 1) || 1);
     const flushEvery = Math.max(10, Number(req.query.flushEvery ?? 100) || 100);
@@ -1177,7 +1163,7 @@ app.get('/xps-ranked/profile-activity-runall', async (req, res) => {
       if (!seen.has(num)) { seen.add(num); allIds.push(num); }
     }
 
-    // Resume from existing
+    // Resume from existing (skip IDs already present in outFile results)
     let existing = undefined;
     const doneIds = new Set();
     try {
@@ -1185,11 +1171,15 @@ app.get('/xps-ranked/profile-activity-runall', async (req, res) => {
       existing = prev;
       const resultsPrev = Array.isArray(prev?.results) ? prev.results : [];
       for (const r of resultsPrev) {
-        if (r && (r.userId !== undefined && r.userId !== null)) doneIds.add(Number(r.userId));
+        if (!r) continue;
+        // Be robust to different key casings
+        const maybeId = r.userId ?? r.user_id ?? r.id;
+        const num = Number(maybeId);
+        if (Number.isFinite(num)) doneIds.add(num);
       }
     } catch {}
 
-    const queue = allIds.filter((id) => !doneIds.has(id));
+    const queue = skipExisting ? allIds.filter((id) => !doneIds.has(id)) : allIds.slice();
 
     const headersOut = buildUpstreamHeaders(req.headers);
     if (auth) headersOut['authorization'] = auth;
@@ -1286,7 +1276,7 @@ app.get('/xps-ranked/profile-activity-runall', async (req, res) => {
     await Promise.all(workers);
     await flushIfNeeded(true);
 
-    return res.json({ ok: true, processed: completed, remaining: queue.length, results: results.length, errors: errors.length, outFile });
+  return res.json({ ok: true, processed: completed, remaining: queue.length, results: results.length, errors: errors.length, outFile, skippedExisting: skipExisting ? doneIds.size : 0 });
   } catch (err) {
     return res.status(500).json({ error: 'Profile activity runall failure', message: err?.message || String(err) });
   }
@@ -1649,10 +1639,7 @@ app.get('/xps-ranked/opensea-lamumu-runall', async (req, res) => {
     // API key'i al
     const hdrApiKey = req.headers['x-api-key'] || req.headers['x-opensea-api-key'];
     const qKey = typeof req.query.openseaApiKey === 'string' ? req.query.openseaApiKey : undefined;
-    const apiKey = (hdrApiKey || qKey || process.env.OPENSEA_API_KEY);
-    if (!apiKey) {
-      return res.status(400).json({ error: 'Missing OpenSea API key. Provide x-api-key header or ?openseaApiKey=...' });
-    }
+  const apiKey = (hdrApiKey || qKey || process.env.OPENSEA_API_KEY);
 
     const activityFile = req.query.activityFile ? String(req.query.activityFile) : path.join(process.cwd(), 'output', 'profile-activity.json');
     const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'opensea-lamumu.json');
@@ -1967,6 +1954,133 @@ app.get('/xps-ranked/profile-xp-stats', async (req, res) => {
   }
 });
 
+// POST/GET /xps-ranked/update-referred-by-from-merged
+// Reads output/profile_stats_lamumu.json (merged file) and updates
+// Supabase user_profile_stats.referred_by_address for each user_id using user_evm.
+// Query/body params:
+//   file: path to input JSON (default output/profile_stats_lamumu.json)
+//   overwrite: true|false (default false) — overwrite non-empty values
+//   dryRun: true|false (default false) — do not write, only return plan
+//   batchSize: number (default 100)
+//   offset: number (default 0), limit: number (optional)
+//   onlyValidAddr: true|false (default true) — require 0x...40 format
+app.all('/xps-ranked/update-referred-by-from-merged', async (req, res) => {
+  if (!requireAdminInProd(req, res)) return;
+  try {
+    const file = String((req.body?.file ?? req.query.file) || path.join(process.cwd(), 'output', 'profile_stats_lamumu.json'));
+    const overwrite = String(req.body?.overwrite ?? req.query.overwrite ?? 'false').toLowerCase() === 'true';
+    const dryRun = String(req.body?.dryRun ?? req.query.dryRun ?? 'false').toLowerCase() === 'true';
+    const onlyValidAddr = String(req.body?.onlyValidAddr ?? req.query.onlyValidAddr ?? 'true').toLowerCase() !== 'false';
+  const batchSize = Math.max(1, Number(req.body?.batchSize ?? req.query.batchSize ?? 100) || 100);
+  const sleepMs = Math.max(0, Number(req.body?.sleepMs ?? req.query.sleepMs ?? process.env.UPDATE_SLEEP_MS ?? 0) || 0);
+  const concurrency = Math.max(1, Number(req.body?.concurrency ?? req.query.concurrency ?? process.env.UPDATE_CONCURRENCY ?? 5) || 5);
+    const offset = Number(req.body?.offset ?? req.query.offset ?? 0) || 0;
+    const limit = req.body?.limit != null || req.query.limit != null ? Number(req.body?.limit ?? req.query.limit) : undefined;
+
+    // Read file
+    let json;
+    try {
+      json = JSON.parse(await fs.readFile(file, 'utf8'));
+    } catch (e) {
+      return res.status(400).json({ error: 'Cannot read input file', file, message: e?.message || String(e) });
+    }
+    const arr = Array.isArray(json?.results) ? json.results : Array.isArray(json) ? json : [];
+    if (!Array.isArray(arr) || arr.length === 0) {
+      return res.status(400).json({ error: 'No rows found in input', file });
+    }
+
+    // Slice
+    const slice = arr.slice(offset, typeof limit === 'number' ? offset + limit : undefined);
+    // Normalize entries
+    const items = slice.map((r) => {
+      const user_id = Number(r.user_id ?? r.userId ?? r.id);
+      let user_evm = typeof r.user_evm === 'string' ? r.user_evm : (typeof r.userEvm === 'string' ? r.userEvm : null);
+      if (typeof user_evm === 'string') user_evm = user_evm.trim().toLowerCase();
+      return { user_id, user_evm };
+    }).filter(r => Number.isFinite(r.user_id) && r.user_id > 0 && (r.user_evm || !onlyValidAddr));
+
+    const isValidAddr = (a) => /^0x[a-f0-9]{40}$/.test(String(a || ''));
+    const valid = items.filter(r => onlyValidAddr ? isValidAddr(r.user_evm) : true);
+
+    const sb = getSupabase();
+
+    // Simple concurrency pool runner
+    const runPool = async (fns, c) => {
+      let i = 0;
+      const workers = Array(Math.min(c, fns.length)).fill(0).map(async () => {
+        while (true) {
+          const idx = i++;
+          if (idx >= fns.length) break;
+          await fns[idx]();
+        }
+      });
+      await Promise.all(workers);
+    };
+
+    const results = [];
+    let toUpdate = 0, updated = 0, skipped = 0, errors = 0;
+
+    // Process in batches to reduce query sizes when selecting existing
+    for (let i = 0; i < valid.length; i += batchSize) {
+      const chunk = valid.slice(i, i + batchSize);
+      const ids = chunk.map(x => x.user_id);
+
+      // Fetch existing referred_by_address for this chunk when needed
+      let existing = new Map();
+      if (!overwrite) {
+        try {
+          const r = await sb.from('user_profile_stats').select('user_id,referred_by_address').in('user_id', ids);
+          if (!r.error && Array.isArray(r.data)) {
+            for (const row of r.data) {
+              existing.set(Number(row.user_id), typeof row.referred_by_address === 'string' ? row.referred_by_address.toLowerCase() : (row.referred_by_address ?? null));
+            }
+          }
+        } catch {}
+      }
+
+      const tasks = chunk.map((it) => async () => {
+        const current = overwrite ? null : existing.get(it.user_id);
+        const shouldUpdate = overwrite ? true : (!current || String(current).trim() === '');
+        if (!shouldUpdate) { skipped++; results.push({ user_id: it.user_id, action: 'skip', current }); return; }
+        toUpdate++;
+        if (dryRun) { results.push({ user_id: it.user_id, action: 'would-update', value: it.user_evm }); return; }
+        try {
+          const up = await sb.from('user_profile_stats').update({ referred_by_address: it.user_evm }).eq('user_id', it.user_id);
+          if (up.error) { errors++; results.push({ user_id: it.user_id, action: 'error', message: up.error.message }); }
+          else { updated++; results.push({ user_id: it.user_id, action: 'updated', value: it.user_evm }); }
+        } catch (e) {
+          errors++; results.push({ user_id: it.user_id, action: 'error', message: e?.message || String(e) });
+        }
+        if (sleepMs > 0) await wait(sleepMs);
+      });
+
+      await runPool(tasks, concurrency);
+    }
+
+    const summary = {
+      ok: true,
+      file,
+      totalInFile: arr.length,
+      processed: valid.length,
+      toUpdate,
+      updated,
+      skipped,
+      errors,
+      overwrite,
+      dryRun,
+      batchSize,
+      offset,
+      limit: typeof limit === 'number' ? limit : null,
+      sample: results.slice(0, 20),
+      sleepMs,
+      concurrency,
+    };
+    return res.json(summary);
+  } catch (err) {
+    return res.status(500).json({ error: 'update-referred-by-from-merged failure', message: err?.message || String(err) });
+  }
+});
+
 // GET /xps-ranked/profile-xp-sum
 // Sums all xp_points from output/profile-xp.json (optionally only ok=true entries)
 // Query: jsonFile (default output/profile-xp.json), onlyOk=true|false
@@ -2071,26 +2185,808 @@ app.get('/xps-ranked/activity-xp-sum', async (req, res) => {
   }
 });
 
-// Root → summary
+// Root → summary (no -html)
 app.get('/', (req, res) => {
   const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-  return res.redirect(308, '/summary-html' + q);
+  return res.redirect(308, '/summary' + q);
 });
 
-// Canonical routes: Redirect to existing handlers with query preserved
+// Root-level page routes will serve content directly (no /xps-ranked prefix)
+// Canonical pages without -html
+app.get('/common-checker', async (req, res) => {
+  try { await renderCommonCheckerPage(req, res); } catch (err) { console.error('common-checker error:', err); return res.status(500).send('Internal Server Error'); }
+});
+app.get('/avg-allocation', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/common-checker' + q);
+});
+app.get('/summary', async (req, res) => {
+  try {
+    // Directly invoke the summary handler logic without changing the visible URL
+    const xpFile = req.query.xpFile ? String(req.query.xpFile) : path.join(process.cwd(), 'output', 'profile-xp.json');
+    const activityFile = req.query.activityFile ? String(req.query.activityFile) : path.join(process.cwd(), 'output', 'profile-activity.json');
+    const onlyOk = String(req.query.onlyOk ?? 'true').toLowerCase() !== 'false';
+    const outFile = req.query.outFile ? String(req.query.outFile) : path.join(process.cwd(), 'output', 'summary.html');
+    const writeFile = String(req.query.writeFile ?? 'true').toLowerCase() !== 'false';
+    const canWrite = writeFile && !(process.env.VERCEL || process.env.NODE_ENV === 'production');
+    const threshold = Number(req.query.threshold ?? 1000) || 1000;
+    const useSupabase = String(req.query.useSupabase ?? 'true').toLowerCase() !== 'false';
+
+    // Reuse the same logic as /xps-ranked/summary-html by calling its implementation
+    // We simulate a call by requiring the function body inline here using a small wrapper
+    // to avoid changing the URL or causing a redirect.
+    // Implementation: call the existing handler function by invoking a local function.
+    const handler = app._router.stack.find(layer => layer.route && layer.route.path === '/xps-ranked/summary-html')?.route?.stack?.[0]?.handle;
+    if (typeof handler === 'function') {
+      // Construct a shallow-cloned req with same query but without URL rewrite
+      const proxyReq = Object.assign(Object.create(Object.getPrototypeOf(req)), req);
+      await handler(proxyReq, res);
+      return;
+    }
+
+    // Fallback: if we couldn't find the existing handler, read and return the static file
+    try {
+      const html = await fs.readFile(outFile, 'utf8');
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      return res.status(200).send(html);
+    } catch {
+      return res.status(500).send('Summary handler not available');
+    }
+  } catch (err) { console.error('summary error:', err); return res.status(500).send('Internal Server Error'); }
+});
+app.get('/users', async (req, res) => {
+  try {
+    req._internalForward = true;
+    req.url = req.originalUrl.replace('/users', '/xps-ranked/users-html');
+    await app._router.handle(req, res, () => {});
+  } catch (err) { console.error('users error:', err); return res.status(500).send('Internal Server Error'); }
+});
+
+// Backwards compatibility: redirect old -html routes to new canonical
+app.get('/common-checker-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/common-checker' + q);
+});
+app.get('/avg-allocation-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/common-checker' + q);
+});
 app.get('/summary-html', (req, res) => {
   const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-  return res.redirect(308, '/xps-ranked/summary-html' + q);
+  return res.redirect(308, '/summary' + q);
 });
 app.get('/users-html', (req, res) => {
   const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-  return res.redirect(308, '/xps-ranked/users-html' + q);
+  return res.redirect(308, '/users' + q);
 });
-
-// Shortcut: /lamumu-holders-html -> /xps-ranked/lamumu-holders-html
+// Hide lamumu-holders page: redirect to users
 app.get('/lamumu-holders-html', (req, res) => {
   const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-  return res.redirect(308, '/xps-ranked/lamumu-holders-html' + q);
+  return res.redirect(308, '/users' + q);
+});
+app.get('/xps-ranked/lamumu-holders-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/users' + q);
+});
+
+// Helpers for Common Checker
+function normalizeEvm(addr) {
+  if (!addr) return undefined;
+  let s = String(addr).trim();
+  if (!s) return undefined;
+  if (!s.startsWith('0x')) {
+    // If it's hex without 0x, add it
+    if (/^[0-9a-fA-F]+$/.test(s)) s = '0x' + s;
+  }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(s)) return undefined;
+  return s.toLowerCase();
+}
+
+async function findUserIdByEvmFromLocal(address, activityFile) {
+  try {
+    const txt = await fs.readFile(activityFile, 'utf8');
+    const data = JSON.parse(txt);
+    const arr = Array.isArray(data?.results) ? data.results : [];
+    for (const r of arr) {
+      const evm = r?.user_evm && String(r.user_evm).toLowerCase();
+      if (evm === address) {
+        const uid = Number(r.userId ?? r.userid ?? r.id);
+        if (Number.isFinite(uid) && uid > 0) return uid;
+      }
+    }
+  } catch {}
+  return undefined;
+}
+
+async function countLamumuForAddress(address, opts = {}) {
+  const chain = (opts.chain || 'ethereum').toLowerCase();
+  const contract = (opts.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a').toLowerCase();
+  const apiKey = opts.apiKey;
+  const maxPages = Math.max(1, Math.min(15, Number(opts.maxPages || 5)));
+  const baseDelayMs = Math.max(100, Number(opts.baseDelayMs || 500));
+  const maxRetries = Math.max(0, Number(opts.maxRetries || 4));
+
+  function countForContractInPage(json, target) {
+    let list = undefined;
+    if (Array.isArray(json?.nfts)) list = json.nfts;
+    else if (Array.isArray(json?.assets)) list = json.assets;
+    else if (Array.isArray(json?.items)) list = json.items;
+    if (!Array.isArray(list)) return 0;
+    let c = 0;
+    for (const it of list) {
+      if (!it || typeof it !== 'object') continue;
+      let addr;
+      if (typeof it.contract === 'string') addr = it.contract;
+      else if (it.contract && typeof it.contract === 'object' && typeof it.contract.address === 'string') addr = it.contract.address;
+      else if (it.collection && typeof it.collection === 'object' && typeof it.collection.address === 'string') addr = it.collection.address;
+      if (addr && String(addr).toLowerCase() === target) c++;
+    }
+    return c;
+  }
+
+  async function fetchOpenSeaPage(nextParam) {
+    const baseUrl = `https://api.opensea.io/api/v2/chain/${encodeURIComponent(chain)}/account/${encodeURIComponent(address)}/nfts`;
+    const url = new URL(baseUrl);
+    if (nextParam) url.searchParams.set('next', nextParam);
+    const headers = { 'accept': 'application/json' };
+    if (apiKey) headers['x-api-key'] = String(apiKey);
+    let attempt = 0;
+    while (true) {
+      try {
+        const resp = await fetch(url.toString(), { method: 'GET', headers });
+        if (resp.status === 429 || resp.status === 503) {
+          if (attempt >= maxRetries) return { resp };
+          const ra = resp.headers.get('retry-after');
+          let waitMs = baseDelayMs * Math.pow(2, attempt);
+          if (ra) {
+            const n = Number(ra); if (Number.isFinite(n)) waitMs = Math.max(waitMs, n * 1000);
+          }
+          await wait(waitMs);
+          attempt++;
+          continue;
+        }
+        const body = await resp.text();
+        let json = undefined;
+        try { json = JSON.parse(body); } catch {}
+        return { resp, json, body };
+      } catch (e) {
+        if (attempt >= maxRetries) return { error: e };
+        await wait(baseDelayMs * Math.pow(2, attempt));
+        attempt++;
+      }
+    }
+  }
+
+  let total = 0;
+  let cursor = undefined;
+  let pages = 0;
+  let lastStatus = undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const { resp, json, body, error } = await fetchOpenSeaPage(cursor);
+    if (error) return { ok: false, error: error?.message || String(error) };
+    lastStatus = resp?.status;
+    if (!resp?.ok) return { ok: false, status: lastStatus, bodySample: (body || '').slice(0, 500) };
+    pages++;
+    if (json) total += countForContractInPage(json, contract);
+    const nextCur = (typeof json?.next === 'string' && json.next)
+      || (typeof json?.next_cursor === 'string' && json.next_cursor)
+      || (typeof json?.continuation === 'string' && json.continuation)
+      || undefined;
+    if (!nextCur) break;
+    cursor = nextCur;
+  }
+  return { ok: true, count: total, pages, status: lastStatus };
+}
+
+// Fetch Lamumu token holdings (token identifiers) for an address from OpenSea API
+async function fetchLamumuHoldingsForAddress(address, opts = {}) {
+  const chain = (opts.chain || 'ethereum').toLowerCase();
+  const contract = (opts.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a').toLowerCase();
+  const apiKey = opts.apiKey;
+  const maxPages = Math.max(1, Math.min(10, Number(opts.maxPages || 2)));
+  const baseDelayMs = Math.max(100, Number(opts.baseDelayMs || 500));
+  const maxRetries = Math.max(0, Number(opts.maxRetries || 4));
+
+  function tokensForContractInPage(json, target) {
+    let list = undefined;
+    if (Array.isArray(json?.nfts)) list = json.nfts;
+    else if (Array.isArray(json?.assets)) list = json.assets;
+    else if (Array.isArray(json?.items)) list = json.items;
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    for (const it of list) {
+      if (!it || typeof it !== 'object') continue;
+      let addr;
+      if (typeof it.contract === 'string') addr = it.contract;
+      else if (it.contract && typeof it.contract === 'object' && typeof it.contract.address === 'string') addr = it.contract.address;
+      else if (it.collection && typeof it.collection === 'object' && typeof it.collection.address === 'string') addr = it.collection.address;
+      if (addr && String(addr).toLowerCase() !== target) continue;
+      // identifier fields may differ; try common keys
+      const idKeys = ['identifier', 'token_id', 'tokenId', 'nft_id', 'id'];
+      let tokenId;
+      for (const k of idKeys) { if (it[k] != null) { tokenId = String(it[k]); break; } }
+      // Some responses nest identifier under it.identifier or it.nft.identifier
+      if (!tokenId && it.nft && typeof it.nft === 'object') {
+        for (const k of idKeys) { if (it.nft[k] != null) { tokenId = String(it.nft[k]); break; } }
+      }
+      if (!tokenId) continue;
+      const name = (typeof it.name === 'string' && it.name) || (typeof it.nft?.name === 'string' && it.nft.name) || undefined;
+      out.push({ token_id: tokenId, name });
+    }
+    return out;
+  }
+
+  async function fetchOpenSeaPage(nextParam) {
+    const baseUrl = `https://api.opensea.io/api/v2/chain/${encodeURIComponent(chain)}/account/${encodeURIComponent(address)}/nfts`;
+    const url = new URL(baseUrl);
+    if (nextParam) url.searchParams.set('next', nextParam);
+    const headers = { 'accept': 'application/json' };
+    if (apiKey) headers['x-api-key'] = String(apiKey);
+    let attempt = 0;
+    while (true) {
+      try {
+        const resp = await fetch(url.toString(), { method: 'GET', headers });
+        if (resp.status === 429 || resp.status === 503) {
+          if (attempt >= maxRetries) return { resp };
+          const ra = resp.headers.get('retry-after');
+          let waitMs = baseDelayMs * Math.pow(2, attempt);
+          if (ra) { const n = Number(ra); if (Number.isFinite(n)) waitMs = Math.max(waitMs, n * 1000); }
+          await wait(waitMs);
+          attempt++; continue;
+        }
+        const body = await resp.text();
+        let json = undefined; try { json = JSON.parse(body); } catch {}
+        return { resp, json, body };
+      } catch (e) {
+        if (attempt >= maxRetries) return { error: e };
+        await wait(baseDelayMs * Math.pow(2, attempt)); attempt++;
+      }
+    }
+  }
+
+  const tokens = [];
+  let cursor = undefined;
+  let pages = 0;
+  let lastStatus = undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const { resp, json, body, error } = await fetchOpenSeaPage(cursor);
+    if (error) return { ok: false, error: error?.message || String(error) };
+    lastStatus = resp?.status;
+    if (!resp?.ok) return { ok: false, status: lastStatus, bodySample: (body || '').slice(0, 500) };
+    pages++;
+    if (json) tokens.push(...tokensForContractInPage(json, contract));
+    const nextCur = (typeof json?.next === 'string' && json.next)
+      || (typeof json?.next_cursor === 'string' && json.next_cursor)
+      || (typeof json?.continuation === 'string' && json.continuation)
+      || undefined;
+    if (!nextCur) break; cursor = nextCur;
+  }
+  return { ok: true, tokens, pages, status: lastStatus };
+}
+
+// Fetch rarity rank for a single Lamumu token via OpenSea v2 token endpoint
+async function fetchLamumuTokenRarity({ chain = 'ethereum', contract = '0x47d7b6116c2303f4d0232c767f71e00db166b67a', tokenId, apiKey, baseDelayMs = 400, maxRetries = 3 }) {
+  if (!tokenId) return { ok: false, error: 'missing tokenId' };
+  const url = `https://api.opensea.io/api/v2/chain/${encodeURIComponent(chain)}/contract/${encodeURIComponent(contract)}/nfts/${encodeURIComponent(String(tokenId))}`;
+  const headers = { 'accept': 'application/json' };
+  if (apiKey) headers['x-api-key'] = String(apiKey);
+  let attempt = 0;
+  while (true) {
+    try {
+      const resp = await fetch(url, { method: 'GET', headers });
+      if (resp.status === 429 || resp.status === 503) {
+        if (attempt >= maxRetries) return { ok: false, status: resp.status };
+        const ra = resp.headers.get('retry-after');
+        let waitMs = baseDelayMs * Math.pow(2, attempt);
+        if (ra) { const n = Number(ra); if (Number.isFinite(n)) waitMs = Math.max(waitMs, n * 1000); }
+        await wait(waitMs); attempt++; continue;
+      }
+      const body = await resp.text();
+      let json = undefined; try { json = JSON.parse(body); } catch {}
+      if (!resp.ok) return { ok: false, status: resp.status, bodySample: (body||'').slice(0,400) };
+      // Probe common fields for rarity rank
+      const rar = (json && (json.rarity || json.nft?.rarity || json.data?.rarity)) || {};
+      let rank = toNumber(rar.rank);
+      if (!Number.isFinite(rank)) {
+        // Some payloads may have rarity_rank or ranking.rank
+        rank = toNumber(json?.rarity_rank) ?? toNumber(json?.nft?.rarity_rank) ?? toNumber(json?.ranking?.rank) ?? undefined;
+      }
+      return { ok: true, rank: Number.isFinite(rank) ? rank : undefined, json };
+    } catch (e) {
+      if (attempt >= maxRetries) return { ok: false, error: e?.message || String(e) };
+      await wait(baseDelayMs * Math.pow(2, attempt)); attempt++;
+    }
+  }
+}
+
+// Common Checker page renderer (shared by both canonical paths)
+async function renderCommonCheckerPage(req, res) {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const qType = (() => {
+    if (!q) return '';
+    const isAddr = /^0x[a-fA-F0-9]{40}$/.test(q);
+    return isAddr ? 'EVM Address' : 'Unknown';
+  })();
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // Global: compute Per Aura with split pool (default 32,500,000 / summary_stats.total_aura)
+  let perAuraVal = null;
+  // Global: compute Per Activity Unit with split pool (default 32,500,000 / (total_threads+total_comments+total_upvotes))
+  let perActivityUnitVal = null;
+  let perAuraBlock = '';
+  // Optional override for total Aura denominator (e.g., use Tier 4+ users total)
+  const totalAuraOverride = (() => {
+    const raw = (process.env.AURA_TOTAL_AURA_OVERRIDE ?? req.query.totalAura);
+    if (raw == null) return null;
+    const n = Number(String(raw).replace(/[,_\s]/g, ''));
+    return (Number.isFinite(n) && n > 0) ? n : null;
+  })();
+  // Global: compute $COMMON price using total supply 10,000,000,000 and optional valuation
+  const TOTAL_COMMON_SUPPLY = 10_000_000_000;
+  const valuationRaw = req.query.valuationUsd ?? process.env.COMMON_VALUATION_USD;
+  const valuationUsd = valuationRaw != null ? Number(String(valuationRaw).replace(/[,\s$]/g, '')) : null;
+  const pricePerCommon = (valuationUsd != null && Number.isFinite(valuationUsd) && valuationUsd > 0)
+    ? (valuationUsd / TOTAL_COMMON_SUPPLY)
+    : null;
+  const fmtPrice = (x) => (typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 8 }) : '—');
+  let priceBlock = '';
+  // Global: compute Per Lamumu (env-configurable; defaults 85,000,000 / 4,500)
+  const LAMUMU_SUPPLY_GLOBAL = Number(process.env.LAMUMU_POOL_SUPPLY ?? 85_000_000);
+  const LAMUMU_TOTAL_GLOBAL = Number(process.env.LAMUMU_TOTAL_COUNT ?? 4_500);
+  const lamumuPerVal = LAMUMU_SUPPLY_GLOBAL / LAMUMU_TOTAL_GLOBAL;
+  const fmtDecGlobal = (x) => (typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '—');
+  let lamumuPerBlock = '';
+  let perUnitBlock = '';
+  // Read allocation percentages from env for the notice (defaults if missing)
+  const lamumuAllocPct = parsePct(process.env.LAMUMU_ALLOCATION_PERCENT, 0.9);
+  const auraAllocPct = parsePct(process.env.AURA_ALLOCATION_PERCENT, 0.6);
+  // Track the total Aura denominator actually used for Per Aura (for UI hint)
+  let totalAuraUsed = null;
+  try {
+    const sb = getSupabase();
+    let totalAura = null;
+    let sumRow = null;
+    // Pull total_aura plus activity totals for activity-based allocation
+    let ss = await sb.from('summary_stats').select('id,total_aura,total_threads,total_comments,total_upvotes,updated_at').eq('id', 1).maybeSingle();
+    if (!ss.error && ss.data) {
+      sumRow = ss.data;
+    } else {
+      const ss2 = await sb.from('summary_stats').select('id,total_aura,total_threads,total_comments,total_upvotes,updated_at').limit(1);
+      if (!ss2.error && Array.isArray(ss2.data) && ss2.data[0]) sumRow = ss2.data[0];
+    }
+    if (sumRow && sumRow.total_aura != null) totalAura = Number(sumRow.total_aura);
+    totalAuraUsed = totalAuraOverride ?? totalAura;
+    // Per Aura (Aura pool share)
+    if (Number.isFinite(totalAuraUsed) && totalAuraUsed > 0) {
+      const AURA_AURA_POOL_SUPPLY = Number(process.env.AURA_AURA_POOL_SUPPLY ?? 32_500_000);
+      perAuraVal = AURA_AURA_POOL_SUPPLY / totalAuraUsed;
+    }
+    // Per Activity Unit (Activity pool share)
+  const actTotals = sumRow || {};
+  const tThreads = Number(actTotals.total_threads);
+  const tComments = Number(actTotals.total_comments);
+  const tUpvotes = Number(actTotals.total_upvotes);
+    const denom = [tThreads, tComments, tUpvotes]
+      .map((n) => (Number.isFinite(n) && n > 0 ? n : 0))
+      .reduce((a, b) => a + b, 0);
+    if (denom > 0) {
+      const AURA_ACTIVITY_POOL_SUPPLY = Number(process.env.AURA_ACTIVITY_POOL_SUPPLY ?? 32_500_000);
+      perActivityUnitVal = AURA_ACTIVITY_POOL_SUPPLY / denom;
+    }
+  } catch {}
+
+  // Combined Per-Unit block (Per Aura | Per Lamumu), no explanatory labels
+  perUnitBlock = `
+    <div class="row" style="display:flex; gap:14px; flex-wrap:wrap; margin-top:14px">
+      <div class="card" style="flex:1; min-width:260px">
+        <div class="title">Per Aura</div>
+        <div class="title" style="margin-top:6px">${fmtDecGlobal(perAuraVal)}</div>
+        ${(Number.isFinite(totalAuraUsed) && totalAuraUsed > 0) ? `<div class="hint">Total Aura used in calc: ${Number(totalAuraUsed).toLocaleString('en-US')} ${totalAuraOverride != null ? '(Tier 4+ users)' : ''}</div>` : ''}
+      </div>
+      <div class="card" style="flex:1; min-width:260px">
+        <div class="title">Per Lamumu</div>
+        <div class="title" style="margin-top:6px">${fmtDecGlobal(lamumuPerVal)}</div>
+      </div>
+    </div>`;
+
+  // Results blocks
+  let resultBlock = '';
+  // EVM address flow
+  if (q && qType === 'EVM Address') {
+    const isProd = (process.env.VERCEL || process.env.NODE_ENV === 'production');
+    const addr = normalizeEvm(q);
+    const msgs = [];
+  let lamumuCount = null;
+  let lamumuTokens = null; // [{token_id, name?}]
+    let userId = null;
+    let aura = null;
+    // For activity-based allocation
+    let userActivityPoints = null; // threads + comments + total_upvotes
+
+    // 1) OpenSea Lamumu count
+  // Use server-side key only (env or fallback); do not rely on user-supplied keys in UI flow
+  const apiKey = (process.env.OPENSEA_API_KEY);
+    try {
+      const lam = await countLamumuForAddress(addr, {
+        apiKey,
+        chain: String(req.query.chain || 'ethereum'),
+        contract: String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a'),
+        maxPages: Number(req.query.maxPages || 5),
+      });
+      if (lam.ok) lamumuCount = lam.count; else msgs.push(`OpenSea error${lam.status ? ' (' + lam.status + ')' : ''}: ${esc(lam.bodySample || lam.error || 'unknown')}`);
+  if (lam.ok && lam.count > 0) {
+        const det = await fetchLamumuHoldingsForAddress(addr, {
+          apiKey,
+          chain: String(req.query.chain || 'ethereum'),
+          contract: String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a'),
+          maxPages: Number(req.query.lamPages || 2),
+        });
+        if (det.ok) {
+          lamumuTokens = det.tokens;
+          // If no local rarity file, enrich first few tokens with rank via OpenSea token endpoint
+          const fetchRarity = String(req.query.fetchRarity ?? (isProd ? 'false' : 'true')).toLowerCase() !== 'false';
+          if (fetchRarity && Array.isArray(lamumuTokens) && lamumuTokens.length) {
+            const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
+            let hasLocal = false; try { await fs.access(rarityFile); hasLocal = true; } catch {}
+            if (!hasLocal) {
+              const limit = Math.max(1, Number(req.query.rarityLimit ?? 10) || 10);
+              const chain = String(req.query.chain || 'ethereum');
+              const contract = String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a');
+              for (const t of lamumuTokens.slice(0, limit)) {
+                if (!t || t.token_id == null) continue;
+                const r = await fetchLamumuTokenRarity({ chain, contract, tokenId: String(t.token_id), apiKey });
+                if (r.ok && Number.isFinite(r.rank)) t.rank = Number(r.rank);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      msgs.push('OpenSea lookup failed: ' + esc(e?.message || String(e)));
+    }
+
+    // 2) Map EVM -> user_id via local file
+    const activityFile = req.query.activityFile ? String(req.query.activityFile) : path.join(process.cwd(), 'output', 'profile-activity.json');
+    try {
+  const uid = await findUserIdByEvmFromLocal(addr, activityFile);
+  if (uid) userId = uid; // if not found, stay silent
+    } catch (e) {
+      msgs.push('Local mapping lookup failed: ' + esc(e?.message || String(e)));
+    }
+
+    // 3) Supabase fallback by EVM: try referred_by_address -> resolve user_id and/or Aura
+    if (!userId || aura == null) {
+      try {
+        const sb = getSupabase();
+        const r = await sb.from('user_profile_stats').select('user_id,xp_points,referred_by_address').ilike('referred_by_address', addr).maybeSingle();
+        if (!r.error && r.data) {
+          if (!userId) {
+            const uid = Number(r.data.user_id);
+            if (Number.isFinite(uid) && uid > 0) userId = uid;
+          }
+          if (aura == null && r.data.xp_points != null) {
+            const n = Number(r.data.xp_points);
+            if (Number.isFinite(n)) aura = n;
+          }
+        }
+      } catch (e) {
+        msgs.push('Supabase address lookup failed: ' + esc(e?.message || String(e)));
+      }
+    }
+
+    // 4) Fetch xp_points (Aura) from Supabase by user_id if still needed
+    if (userId && aura == null) {
+      try {
+        const sb = getSupabase();
+        let got = null;
+        // Prefer user_profile_stats.xp_points
+        const r1 = await sb.from('user_profile_stats').select('xp_points').eq('user_id', userId).maybeSingle();
+        if (!r1.error && r1.data && r1.data.xp_points != null) {
+          got = Number(r1.data.xp_points);
+        } else {
+          // Fallback to user_xp
+          const r2 = await sb.from('user_xp').select('xp_points').eq('user_id', userId).maybeSingle();
+          if (!r2.error && r2.data && r2.data.xp_points != null) got = Number(r2.data.xp_points);
+        }
+        if (got != null && Number.isFinite(got)) aura = got; else msgs.push('Aura (xp_points) not found in Supabase for this user.');
+      } catch (e) {
+        msgs.push('Supabase lookup failed: ' + esc(e?.message || String(e)));
+      }
+    }
+
+    // 5) Fetch user activity (threads + comments + total_upvotes) for activity-based allocation
+    if (userId && userActivityPoints == null) {
+      try {
+        const sb = getSupabase();
+        // Prefer user_profile_stats
+        const r = await sb.from('user_profile_stats').select('threads, comments, total_upvotes').eq('user_id', userId).maybeSingle();
+        let thr, com, upv;
+        if (!r.error && r.data) {
+          thr = Number(r.data.threads);
+          com = Number(r.data.comments);
+          upv = Number(r.data.total_upvotes);
+        } else {
+          // Fallback to user_activity
+          const r2 = await sb.from('user_activity').select('threads, comments, total_upvotes').eq('user_id', userId).maybeSingle();
+          if (!r2.error && r2.data) {
+            thr = Number(r2.data.threads);
+            com = Number(r2.data.comments);
+            upv = Number(r2.data.total_upvotes);
+          }
+        }
+        const okThr = Number.isFinite(thr) && thr > 0 ? thr : 0;
+        const okCom = Number.isFinite(com) && com > 0 ? com : 0;
+        const okUpv = Number.isFinite(upv) && upv > 0 ? upv : 0;
+        userActivityPoints = okThr + okCom + okUpv;
+      } catch (e) {
+        msgs.push('Supabase activity lookup failed: ' + esc(e?.message || String(e)));
+      }
+    }
+
+    // 6) Combined per-user allocation (Aura, Lamumu, Common Activity, Total) shown after search
+    let allocationBlock = '';
+    try {
+      const fmtDec = (x) => (typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '—');
+      const fmtUsd = (x) => (typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }) : '—');
+      const fmtPrice6 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 6 }) : '—');
+      const auraAlloc = (perAuraVal != null && aura != null && Number.isFinite(aura)) ? aura * perAuraVal : null;
+
+      // Lamumu allocation: rarity-weighted if token-level ranks available, else uniform perLamumu
+      let lamAlloc = null;
+      let lamAllocHint = '';
+      if (Array.isArray(lamumuTokens) && lamumuTokens.length > 0) {
+        // Build rarity map once
+        const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
+        let rarityMap = null; // token_id -> { rank, score }
+        try {
+          const rarityDataTxt = await fs.readFile(rarityFile, 'utf8');
+          const rarityData = JSON.parse(rarityDataTxt);
+          rarityMap = new Map();
+          if (Array.isArray(rarityData)) {
+            for (const r of rarityData) {
+              if (!r || typeof r !== 'object') continue;
+              const tid = r.token_id != null ? String(r.token_id) : (r.id != null ? String(r.id) : undefined);
+              if (!tid) continue;
+              const rank = toNumber(r.rank);
+              const score = toNumber(r.score) ?? toNumber(r.rarity_score);
+              rarityMap.set(tid, { rank, score });
+            }
+          } else if (rarityData && typeof rarityData === 'object') {
+            for (const [k, v] of Object.entries(rarityData)) {
+              if (!k) continue; const tid = String(k);
+              const rank = toNumber(v?.rank);
+              const score = toNumber(v?.score) ?? toNumber(v?.rarity_score);
+              rarityMap.set(tid, { rank, score });
+            }
+          }
+        } catch {}
+
+        const perTokenByRank = (rank) => (Number.isFinite(rank) && rank <= 350) ? 21100 : (Number.isFinite(rank) && rank <= 750) ? 18500 : 16200;
+        let sum = 0;
+        for (const t of lamumuTokens) {
+          const tid = t?.token_id != null ? String(t.token_id) : undefined;
+          let rank = Number.isFinite(toNumber(t?.rank)) ? toNumber(t.rank) : (tid && rarityMap ? toNumber(rarityMap.get(tid)?.rank) : undefined);
+          if (!Number.isFinite(rank)) {
+            // Fallback: treat token_id as rank if numeric (e.g., #2867 means rank 2867)
+            const n = tid != null ? Number(String(tid).replace(/[^0-9.-]/g, '')) : NaN;
+            if (Number.isFinite(n)) rank = n;
+          }
+          sum += perTokenByRank(rank);
+        }
+        lamAlloc = sum;
+        lamAllocHint = 'rarity-weighted';
+      } else {
+        lamAlloc = (typeof lamumuCount === 'number' && Number.isFinite(lamumuCount)) ? lamumuCount * lamumuPerVal : null;
+        lamAllocHint = 'uniform';
+      }
+
+      const actAlloc = (perActivityUnitVal != null && userActivityPoints != null && Number.isFinite(userActivityPoints)) ? userActivityPoints * perActivityUnitVal : null;
+      const totalAlloc = (auraAlloc ?? 0) + (lamAlloc ?? 0) + (actAlloc ?? 0);
+      if (auraAlloc != null || lamAlloc != null || actAlloc != null) {
+        const FDV_SCENARIOS = [250_000_000, 500_000_000, 1_000_000_000];
+        const scenarioHtml = (() => {
+          if (!Number.isFinite(totalAlloc) || totalAlloc <= 0) return '';
+          const rows = FDV_SCENARIOS.map(fdv => {
+            const price = fdv / 10_000_000_000;
+            const valTotal = totalAlloc * price;
+            const valP1 = (totalAlloc * 0.5) * price;
+            const valP2 = (totalAlloc * 0.5) * price;
+            const label = fdv >= 1_000_000_000 ? 'FDV 1B' : `FDV ${Math.round(fdv/1_000_000)}M`;
+            return `
+              <div class="card" style="flex:1">
+                <div class="label">${label}</div>
+                <div class="hint">Price: ${fmtPrice6(price)}</div>
+                <div class="row" style="margin-top:8px; gap:10px">
+                  <div style="flex:1">
+                    <div class="label">Phase 1 (50%)</div>
+                    <div class="title">${fmtUsd(valP1)}</div>
+                  </div>
+                  <div style="flex:1">
+                    <div class="label">Phase 2 (50%)</div>
+                    <div class="title">${fmtUsd(valP2)}</div>
+                  </div>
+                </div>
+                <div class="hint" style="margin-top:6px">Total (100%): ${fmtUsd(valTotal)}</div>
+              </div>`;
+          }).join('');
+          return `
+            <div class="label" style="margin-top:8px">Scenario values (2 phases @ 50%/50%)</div>
+            <div class="row" style="margin-top:8px">${rows}</div>`;
+        })();
+        allocationBlock = `
+          <div class="card" style="margin-top:14px">
+            <div class="title">Your Allocation</div>
+            
+            <div class="row" style="margin-top:10px">
+              <div class="card" style="flex:1">
+                <div class="label">Aura Allocation</div>
+                <div class="title">${fmtDec(auraAlloc)}</div>
+                ${pricePerCommon != null ? `<div class="hint">${fmtUsd(auraAlloc * pricePerCommon)}</div>` : ''}
+              </div>
+              <div class="card" style="flex:1">
+                <div class="label">Lamumu Allocation</div>
+                <div class="title">${fmtDec(lamAlloc)}</div>
+                ${pricePerCommon != null ? `<div class="hint">${fmtUsd(lamAlloc * pricePerCommon)}</div>` : ''}
+                <div class="hint">${lamAllocHint}</div>
+              </div>
+              <div class="card" style="flex:1">
+                <div class="label">Common Activity Allocation</div>
+                <div class="title">${fmtDec(actAlloc)}</div>
+                ${pricePerCommon != null ? `<div class="hint">${fmtUsd(actAlloc * pricePerCommon)}</div>` : ''}
+              </div>
+              <div class="card" style="flex:1">
+                <div class="label">Total Allocation</div>
+                <div class="title">${fmtDec((auraAlloc==null && lamAlloc==null) ? null : totalAlloc)}</div>
+                ${pricePerCommon != null ? `<div class="hint">${fmtUsd(totalAlloc * pricePerCommon)}</div>` : ''}
+              </div>
+            </div>
+            ${scenarioHtml}
+          </div>`;
+      }
+    } catch {}
+
+    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('en-US') : '—');
+    // Optional rarity mapping: output/lamumu-rarity.json (object or array). Each entry should provide token_id and rank/score.
+    let lamumuRarityBlock = '';
+    try {
+      if (Array.isArray(lamumuTokens) && lamumuTokens.length) {
+        const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
+        let rarityData = null;
+        try { rarityData = JSON.parse(await fs.readFile(rarityFile, 'utf8')); } catch {}
+        let rarityMap = null; // token_id -> { rank?, score? }
+        if (rarityData) {
+          if (Array.isArray(rarityData)) {
+            rarityMap = new Map();
+            for (const r of rarityData) {
+              if (!r || typeof r !== 'object') continue;
+              const tid = r.token_id != null ? String(r.token_id) : (r.id != null ? String(r.id) : undefined);
+              if (!tid) continue;
+              const rank = toNumber(r.rank);
+              const score = toNumber(r.score) ?? toNumber(r.rarity_score);
+              rarityMap.set(tid, { rank, score });
+            }
+          } else if (typeof rarityData === 'object') {
+            rarityMap = new Map();
+            for (const [k, v] of Object.entries(rarityData)) {
+              if (!k) continue; const tid = String(k);
+              const rank = toNumber(v?.rank);
+              const score = toNumber(v?.score) ?? toNumber(v?.rarity_score);
+              rarityMap.set(tid, { rank, score });
+            }
+          }
+        }
+        const totalSupply = Number(process.env.LAMUMU_TOTAL_COUNT ?? 4500) || 4500;
+        const rows = lamumuTokens.slice(0, 20).map(t => {
+          const tid = t.token_id;
+          const info = rarityMap?.get(String(tid));
+          let rankVal = Number.isFinite(toNumber(t?.rank)) ? toNumber(t.rank) : (info?.rank);
+          const rankTxt = (Number.isFinite(rankVal)) ? `Rank ${rankVal} / ${totalSupply}` : '—';
+          const scoreTxt = (info?.score && Number.isFinite(info.score)) ? info.score.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—';
+          return `<div class="row" style="justify-content:space-between"><div>#${String(tid)}</div><div class="hint">${rankTxt}${info?.score?` • Score ${scoreTxt}`:''}</div></div>`;
+        }).join('');
+        lamumuRarityBlock = `
+          <div class="card" style="margin-top:10px">
+            <div class="label">Lamumu holdings${lamumuTokens.length>20?` (first 20 shown)`:''}</div>
+            <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px">${rows || '<div class="hint">No tokens found</div>'}</div>
+            ${!rarityData ? '<div class="hint" style="margin-top:8px">Rarity data not available. Provide output/lamumu-rarity.json to show ranks.</div>' : ''}
+          </div>`;
+      }
+    } catch {}
+    resultBlock = `
+      <div class="card" style="margin-top:14px">
+        <div class="title">Result</div>
+        <div class="row" style="margin-top:10px">
+          <div class="card" style="flex:1">
+            <div class="label">Lamumu count</div>
+            <div class="title">${fmt(lamumuCount)}</div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="label">Aura (xp_points)</div>
+            <div class="title">${fmt(aura)}</div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="label">Common activity points</div>
+            <div class="title">${fmt(userActivityPoints)}</div>
+            <div class="hint">threads + comments + upvotes</div>
+          </div>
+        </div>
+    ${(() => { const out = filterUserMsgs(msgs); return out.length ? `<div class="hint" style="margin-top:8px">${out.map(m => esc(m)).join('<br/>')}</div>` : ''; })()}
+  </div>` + lamumuRarityBlock + allocationBlock;
+  }
+
+  const html = `<!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Common Checker</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+      <style>
+        :root { --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#22d3ee; --line:#1e293b; }
+        *{box-sizing:border-box}
+        body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--text)}
+  header{padding:20px 22px; border-bottom:1px solid var(--line); text-align:center}
+        .topnav{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap}
+        .topnav .sep{color:var(--muted)}
+  .btn{display:inline-block; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--text); text-decoration:none; font-size:14px}
+        .btn:hover{border-color:var(--accent); color:var(--accent)}
+        .btn.current{pointer-events:none; opacity:0.8}
+  .container{padding:16px 18px; max-width:1000px; margin:0 auto}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px}
+  .label{color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:0.06em}
+  .title{font-size:24px; font-weight:700; margin:0 0 10px}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px}
+  input[type="text"]{flex:1; min-width:300px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#0f172a; color:var(--text); font-size:14px}
+  .hint{color:var(--muted); font-size:13px; margin-top:6px}
+  .notice{border:2px solid var(--accent); background:rgba(34,211,238,0.12); color:var(--text); padding:14px 16px; border-radius:12px; font-size:15px; font-weight:700;}
+  .notice .em{color:var(--accent)}
+      </style>
+    </head>
+    <body>
+      <header>
+        <div class="topnav">
+          <a class="btn" href="/summary">Common Stats</a>
+          <span class="sep">•</span>
+          <a class="btn" href="/users">Users stats»</a>
+          <span class="sep">•</span>
+          
+          <a class="btn current" href="/common-checker">Common Checker</a>
+        </div>
+        <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
+      </header>
+      <div class="container">
+        <div class="notice" role="note" aria-label="allocation-note">
+          Note: Lamumu total allocation is assumed to be <span class="em">${fmtPct(lamumuAllocPct)}</span>; Aura total allocation is assumed to be <span class="em">${fmtPct(auraAllocPct)}</span>.
+        </div>
+        <div class="card">
+          <div class="title">Common Checker</div>
+          <div class="label">Enter EVM address</div>
+          <form method="GET" action="${esc(req.path)}" class="row">
+            <input type="text" name="q" value="${esc(q)}" placeholder="e.g. 0xabc..." />
+            <button class="btn" type="submit">Check</button>
+          </form>
+          
+        </div>
+        ${priceBlock}
+    ${perUnitBlock}
+        ${resultBlock}
+      </div>
+    </body>
+  </html>`;
+  res.setHeader('content-type', 'text/html; charset=utf-8');
+  return res.status(200).send(html);
+}
+
+// Canonical pages for Common Checker
+app.get('/xps-ranked/common-checker-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/common-checker' + q);
+});
+app.get('/xps-ranked/avg-allocation-html', (req, res) => {
+  const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(308, '/common-checker' + q);
 });
 
 // GET /xps-ranked/summary-html
@@ -2281,13 +3177,14 @@ app.get('/xps-ranked/summary-html', async (req, res) => {
   <body>
     <header>
   <div class="topnav">
-  <a class="btn current" href="/summary-html">Common Stats</a>
+  <a class="btn current" href="/summary">Common Stats</a>
     <span class="sep">•</span>
-  <a class="btn" href="/users-html">Users stats»</a>
+  <a class="btn" href="/users">Users stats»</a>
     <span class="sep">•</span>
-  <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
+  
+  <a class="btn" href="/common-checker">Common Checker</a>
   </div>
-  <div class="meta">Data as of 8.10.2025</div>
+  <div class="meta">Data as of 10.10.2025</div>
   <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
@@ -2477,7 +3374,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
         params.set('order', effectiveOrder);
         params.set('onlyOk', String(onlyOk));
         if (q) params.set('q', q);
-        return `/users-html?${params.toString()}`;
+        return `/users?${params.toString()}`;
       }
 
       const rowsHtml = users.map((u, idx) => `
@@ -2497,8 +3394,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
         <td class="cell threads" data-label="Threads">${fmt(u.threads)}</td>
         <td class="cell comments" data-label="Comments">${fmt(u.comments)}</td>
         <td class="cell upvotes" data-label="Total Upvotes">${fmt(u.totalUpvotes)}</td>
-        <td class="cell cthreads" data-label="Comment Threads">${fmt(u.commentThreads)}</td>
-        <td class="cell lholder" data-label="Lamumu holder">${(u.lamumu ?? 0) >= 1 ? '✓' : ''}</td>
+  <td class="cell cthreads" data-label="Comment Threads">${fmt(u.commentThreads)}</td>
       </tr>`).join('');
 
       const html = `<!DOCTYPE html>
@@ -2540,20 +3436,21 @@ app.get('/xps-ranked/users-html', async (req, res) => {
   <body>
     <header>
       <div class="topnav">
-        <a class="btn" href="/summary-html">Common Stats</a>
+  <a class="btn" href="/summary">Common Stats</a>
         <span class="sep">•</span>
-        <a class="btn current" href="/users-html">Users stats»</a>
+  <a class="btn current" href="/users">Users stats»</a>
         <span class="sep">•</span>
-        <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
+        
+  <a class="btn" href="/common-checker">Common Checker</a>
       </div>
-  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 8.10.2025</div>
+  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 10.10.2025</div>
   <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
       <div class="toolbar">
         <div>
           <div>Totals: ${fmt(total)} • Page ${fmt(curPage)} / ${fmt(totalPages)} • Sorted by ${esc(sortBy)} ${esc(effectiveOrder)}${q ? ` • Search: ${esc(q)}` : ''}</div>
-          <form method="GET" action="/users-html" style="display:flex; gap:6px; align-items:center; margin-top:6px">
+          <form method="GET" action="/users" style="display:flex; gap:6px; align-items:center; margin-top:6px">
             <input type="hidden" name="sortBy" value="${esc(sortBy)}" />
             <input type="hidden" name="order" value="${esc(effectiveOrder)}" />
             <input type="hidden" name="limit" value="${fmt(limit)}" />
@@ -2582,7 +3479,6 @@ app.get('/xps-ranked/users-html', async (req, res) => {
             <th>Comments</th>
             <th>Total Upvotes</th>
             <th>Comment Threads</th>
-            <th>Lamumu holder</th>
           </tr>
         </thead>
         <tbody>
@@ -2713,7 +3609,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
       params.set('order', order);
       params.set('onlyOk', String(onlyOk));
       if (q) params.set('q', q);
-  return `/users-html?${params.toString()}`;
+  return `/users?${params.toString()}`;
     }
 
     const rows = slice.map((u, idx) => `
@@ -2733,8 +3629,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
         <td class="cell threads" data-label="Threads">${fmt(u.threads)}</td>
         <td class="cell comments" data-label="Comments">${fmt(u.comments)}</td>
         <td class="cell upvotes" data-label="Total Upvotes">${fmt(u.totalUpvotes)}</td>
-        <td class="cell cthreads" data-label="Comment Threads">${fmt(u.commentThreads)}</td>
-        <td class="cell lholder" data-label="Lamumu holder">${(u.lamumu ?? 0) >= 1 ? '✓' : ''}</td>
+  <td class="cell cthreads" data-label="Comment Threads">${fmt(u.commentThreads)}</td>
       </tr>`).join('');
 
     const html = `<!DOCTYPE html>
@@ -2776,20 +3671,21 @@ app.get('/xps-ranked/users-html', async (req, res) => {
   <body>
     <header>
       <div class="topnav">
-        <a class="btn" href="/summary-html">Common Stats</a>
+  <a class="btn" href="/summary">Common Stats</a>
         <span class="sep">•</span>
-        <a class="btn current" href="/users-html">Users stats»</a>
+  <a class="btn current" href="/users">Users stats»</a>
         <span class="sep">•</span>
-        <a class="btn" href="/lamumu-holders-html">Lamumu holder stats»</a>
+        
+  <a class="btn" href="/common-checker">Common Checker</a>
       </div>
-  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 8.10.2025</div>
+  <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Data as of 10.10.2025</div>
       <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
     </header>
     <div class="container">
       <div class="toolbar">
         <div>
           <div>Totals: ${fmt(total)} • Page ${fmt(curPage)} / ${fmt(totalPages)} • Sorted by ${esc(sortBy)} ${esc(order)}${q ? ` • Search: ${esc(q)}` : ''}</div>
-          <form method="GET" action="/users-html" style="display:flex; gap:6px; align-items:center; margin-top:6px">
+          <form method="GET" action="/users" style="display:flex; gap:6px; align-items:center; margin-top:6px">
             <input type="hidden" name="sortBy" value="${esc(sortBy)}" />
             <input type="hidden" name="order" value="${esc(order)}" />
             <input type="hidden" name="limit" value="${fmt(limit)}" />
@@ -2818,7 +3714,6 @@ app.get('/xps-ranked/users-html', async (req, res) => {
             <th>Comments</th>
             <th>Total Upvotes</th>
             <th>Comment Threads</th>
-            <th>Lamumu holder</th>
           </tr>
         </thead>
         <tbody>
@@ -2846,7 +3741,7 @@ app.get('/xps-ranked/users-html', async (req, res) => {
   }
 });
 
-// Lamumu holder stats — same table as users-html but sorted by lamumu_count desc
+// Lamumu holder stats — same table as users but sorted by lamumu_count desc
 app.get('/xps-ranked/lamumu-holders-html', async (req, res) => {
   try {
     const page = Math.max(1, toNumber(req.query.page) || 1);
@@ -2981,7 +3876,7 @@ app.get('/xps-ranked/lamumu-holders-html', async (req, res) => {
         if ((lamumu ?? 0) >= 1) users.push({ id, name: username, avatar, xp, lamumu, ...act });
       }
 
-      // Search filter similar to users-html
+  // Search filter similar to /users
       let filtered = users;
       if (q) {
         const qLower = q.toLowerCase();
@@ -3072,11 +3967,13 @@ app.get('/xps-ranked/lamumu-holders-html', async (req, res) => {
     <body>
       <header>
         <div class="topnav">
-          <a class="btn" href="/summary-html">Common Stats</a>
+          <a class="btn" href="/summary">Common Stats</a>
           <span class="sep">•</span>
-          <a class="btn" href="/users-html">Users stats»</a>
+          <a class="btn" href="/users">Users stats»</a>
           <span class="sep">•</span>
-          <a class="btn current" href="/lamumu-holders-html">Lamumu holder stats»</a>
+          <a class="btn current" href="/users">Lamumu holder stats»</a>
+          <span class="sep">•</span>
+          <a class="btn" href="/common-checker">Common Checker</a>
         </div>
   <div class="meta" style="color:#94a3b8; font-size:12px; margin-top:6px">Sorted by Lamumu count (desc)</div>
   <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
@@ -3085,7 +3982,7 @@ app.get('/xps-ranked/lamumu-holders-html', async (req, res) => {
         <div class="toolbar">
           <div>
             <div>Page ${fmt(page)} / ${fmt(totalPages)} • Total ${fmt(totalCount)}</div>
-            <form method="GET" action="/lamumu-holders-html" style="display:flex; gap:6px; align-items:center; margin-top:6px">
+            <form method="GET" action="/users" style="display:flex; gap:6px; align-items:center; margin-top:6px">
               <input type="hidden" name="order" value="${order}" />
               <input type="hidden" name="limit" value="${limit}" />
               ${useSupabase ? '<input type="hidden" name="useSupabase" value="true" />' : ''}
@@ -3177,6 +4074,75 @@ app.get('/xps-ranked/stats', async (req, res) => {
     return res.json({ ok: true, totalPersons: picked.size, threshold, overThreshold, zeroXp, jsonFile, idKeyUsed: (idKey || (picked.size ? [...picked.values()][0].idKey : null)) });
   } catch (err) {
     return res.status(500).json({ error: 'Stats failure', message: err?.message || String(err) });
+  }
+});
+
+// GET /xps-ranked/sum-xp
+// Sums xp_points across unique users in a merged JSON file (default output/concat.json).
+// Deduplicates by detected id key (or explicit idKey) and uses the maximum xp_points per user if duplicates exist.
+// Query params: jsonFile (path), idKey (optional)
+app.get('/xps-ranked/sum-xp', async (req, res) => {
+  try {
+    const jsonFile = req.query.jsonFile ? String(req.query.jsonFile) : path.join(process.cwd(), 'output', 'concat.json');
+    const idKey = req.query.idKey ? String(req.query.idKey) : undefined;
+
+    const text = await fs.readFile(jsonFile, 'utf8');
+    const arr = JSON.parse(text);
+    if (!Array.isArray(arr)) {
+      return res.status(400).json({ error: 'Invalid concat JSON: root is not an array' });
+    }
+
+    const picked = new Map(); // id -> { idKey, idValue, xp, tier }
+    for (const item of arr) {
+      if (!item || typeof item !== 'object') continue;
+      const idInfo = getIdFromObject(item, idKey);
+      if (!idInfo) continue;
+      const id = `${idInfo.key}::${idInfo.value}`;
+      const xpInfo = getXpPointsFromObject(item);
+      const xp = xpInfo ? xpInfo.value : undefined;
+      if (xp === undefined) continue;
+      const tierNum = toNumber(item?.tier);
+      const prev = picked.get(id);
+      if (!prev || xp > prev.xp) picked.set(id, { idKey: idInfo.key, idValue: idInfo.value, xp, tier: (Number.isFinite(tierNum) ? tierNum : undefined) });
+    }
+
+    let total_aura = 0; // inclusive of all tiers
+    let total_aura_excl_t4 = 0; // excludes Tier 4
+    let minXp = Number.POSITIVE_INFINITY;
+    let maxXp = 0;
+    const tierCounts = new Map(); // tier -> count
+    let tieredUsers = 0;
+    for (const v of picked.values()) {
+      total_aura += v.xp;
+      if (v.tier === 4) {
+        // exclude tier 4 from this subtotal
+      } else {
+        total_aura_excl_t4 += v.xp;
+      }
+      if (v.xp < minXp) minXp = v.xp;
+      if (v.xp > maxXp) maxXp = v.xp;
+      if (Number.isFinite(v.tier)) {
+        tieredUsers++;
+        const t = v.tier;
+        tierCounts.set(t, (tierCounts.get(t) || 0) + 1);
+      }
+    }
+    const count = picked.size;
+    const avgXp = count > 0 ? total_aura / count : 0;
+
+    // Convert tierCounts map to a plain object sorted by tier ascending for readability
+    const tier_counts = {};
+    const sortedTiers = Array.from(tierCounts.entries()).sort((a, b) => a[0] - b[0]);
+    for (const [t, c] of sortedTiers) tier_counts[t] = c;
+
+    return res.json({ ok: true, jsonFile, idKeyUsed: (idKey || (count ? [...picked.values()][0].idKey : null)),
+      total_users: count,
+      total_aura, // inclusive
+      total_aura_excl_tier4: total_aura_excl_t4,
+      min_xp: (count ? minXp : 0), max_xp: maxXp, avg_xp: avgXp,
+      tier_counts, tiered_users: tieredUsers });
+  } catch (err) {
+    return res.status(500).json({ error: 'sum-xp failure', message: err?.message || String(err) });
   }
 });
 
@@ -3477,6 +4443,7 @@ app.get('/supabase/import-user-profile-stats', limiter(RATE_LIMITS.write), async
 // profile_stats_lamumu.json'dan user_profile_stats tablosuna upsert eder (varsa update, yoksa insert).
 // Query: file (default output/profile_stats_lamumu.json), chunkSize (default 500), key=service|anon
 app.get('/supabase/import-user-profile-stats-lamumu', limiter(RATE_LIMITS.write), async (req, res) => {
+  if (!requireAdminInProd(req, res)) return;
   try {
     const file = req.query.file ? String(req.query.file) : path.join(process.cwd(), 'output', 'profile_stats_lamumu.json');
     const chunkSize = Math.max(50, Math.min(1000, Number(req.query.chunkSize ?? 500) || 500));
