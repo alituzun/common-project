@@ -2575,17 +2575,13 @@ async function renderCommonCheckerPage(req, res) {
     }
   } catch {}
 
-  // Combined Per-Unit block (Per Aura | Per Lamumu), no explanatory labels
+  // Combined Per-Unit block (Per Aura only) — Per Lamumu removed per request
   perUnitBlock = `
     <div class="row" style="display:flex; gap:14px; flex-wrap:wrap; margin-top:14px">
       <div class="card" style="flex:1; min-width:260px">
         <div class="title">Per Aura</div>
         <div class="title" style="margin-top:6px">${fmtDecGlobal(perAuraVal)}</div>
-        ${(Number.isFinite(totalAuraUsed) && totalAuraUsed > 0) ? `<div class="hint">Total Aura used in calc: ${Number(totalAuraUsed).toLocaleString('en-US')} ${totalAuraOverride != null ? '(Tier 4+ users)' : ''}</div>` : ''}
-      </div>
-      <div class="card" style="flex:1; min-width:260px">
-        <div class="title">Per Lamumu</div>
-        <div class="title" style="margin-top:6px">${fmtDecGlobal(lamumuPerVal)}</div>
+        ${(Number.isFinite(totalAuraUsed) && totalAuraUsed > 0) ? `<div class=\"hint\">Total Aura used in calc: ${Number(totalAuraUsed).toLocaleString('en-US')} ${totalAuraOverride != null ? '(Tier 4+ users)' : ''}</div>` : ''}
       </div>
     </div>`;
 
@@ -2604,45 +2600,60 @@ async function renderCommonCheckerPage(req, res) {
     let userActivityPoints = null; // threads + comments + total_upvotes
 
     // 1) OpenSea Lamumu count
-  // Use server-side key only (env or fallback); do not rely on user-supplied keys in UI flow
-  const apiKey = (process.env.OPENSEA_API_KEY);
+    // Use server-side key only (env); if missing, skip OpenSea calls and stay silent in production
+    const apiKey = (process.env.OPENSEA_API_KEY);
     try {
-      const lam = await countLamumuForAddress(addr, {
-        apiKey,
-        chain: String(req.query.chain || 'ethereum'),
-        contract: String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a'),
-        maxPages: Number(req.query.maxPages || 5),
-      });
-      if (lam.ok) lamumuCount = lam.count; else msgs.push(`OpenSea error${lam.status ? ' (' + lam.status + ')' : ''}: ${esc(lam.bodySample || lam.error || 'unknown')}`);
-  if (lam.ok && lam.count > 0) {
-        const det = await fetchLamumuHoldingsForAddress(addr, {
+      if (apiKey) {
+        const lam = await countLamumuForAddress(addr, {
           apiKey,
           chain: String(req.query.chain || 'ethereum'),
           contract: String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a'),
-          maxPages: Number(req.query.lamPages || 2),
+          maxPages: Number(req.query.maxPages || 5),
         });
-        if (det.ok) {
-          lamumuTokens = det.tokens;
-          // If no local rarity file, enrich first few tokens with rank via OpenSea token endpoint
-          const fetchRarity = String(req.query.fetchRarity ?? (isProd ? 'false' : 'true')).toLowerCase() !== 'false';
-          if (fetchRarity && Array.isArray(lamumuTokens) && lamumuTokens.length) {
-            const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
-            let hasLocal = false; try { await fs.access(rarityFile); hasLocal = true; } catch {}
-            if (!hasLocal) {
-              const limit = Math.max(1, Number(req.query.rarityLimit ?? 10) || 10);
-              const chain = String(req.query.chain || 'ethereum');
-              const contract = String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a');
-              for (const t of lamumuTokens.slice(0, limit)) {
-                if (!t || t.token_id == null) continue;
-                const r = await fetchLamumuTokenRarity({ chain, contract, tokenId: String(t.token_id), apiKey });
-                if (r.ok && Number.isFinite(r.rank)) t.rank = Number(r.rank);
+        if (lam.ok) {
+          lamumuCount = lam.count;
+        } else {
+          // Do not surface raw OpenSea errors in UI; log server-side for debugging
+          if (!isProd) msgs.push('OpenSea verisi alınamadı.');
+          console.warn('OpenSea count error', { status: lam.status, err: lam.bodySample || lam.error });
+        }
+        if (lam.ok && lam.count > 0) {
+          const det = await fetchLamumuHoldingsForAddress(addr, {
+            apiKey,
+            chain: String(req.query.chain || 'ethereum'),
+            contract: String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a'),
+            maxPages: Number(req.query.lamPages || 2),
+          });
+          if (det.ok) {
+            lamumuTokens = det.tokens;
+            // If no local rarity file, enrich first few tokens with rank via OpenSea token endpoint
+            const fetchRarity = String(req.query.fetchRarity ?? (isProd ? 'false' : 'true')).toLowerCase() !== 'false';
+            if (fetchRarity && Array.isArray(lamumuTokens) && lamumuTokens.length) {
+              const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
+              let hasLocal = false; try { await fs.access(rarityFile); hasLocal = true; } catch {}
+              if (!hasLocal) {
+                const limit = Math.max(1, Number(req.query.rarityLimit ?? 10) || 10);
+                const chain = String(req.query.chain || 'ethereum');
+                const contract = String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a');
+                for (const t of lamumuTokens.slice(0, limit)) {
+                  if (!t || t.token_id == null) continue;
+                  const r = await fetchLamumuTokenRarity({ chain, contract, tokenId: String(t.token_id), apiKey });
+                  if (r.ok && Number.isFinite(r.rank)) t.rank = Number(r.rank);
+                }
               }
             }
+          } else {
+            if (!isProd) msgs.push('OpenSea detayları alınamadı.');
+            console.warn('OpenSea holdings error', { status: det.status, err: det.bodySample || det.error });
           }
         }
+      } else {
+        // No API key configured; skip OpenSea entirely (avoid 401s in production)
+        if (!isProd) msgs.push('OpenSea API key yok; Lamumu verisi atlandı.');
       }
     } catch (e) {
-      msgs.push('OpenSea lookup failed: ' + esc(e?.message || String(e)));
+      if (!isProd) msgs.push('OpenSea lookup hata: ' + esc(e?.message || String(e)));
+      console.warn('OpenSea lookup exception', e);
     }
 
     // 2) Map EVM -> user_id via local file
