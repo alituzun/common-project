@@ -2627,12 +2627,25 @@ async function renderCommonCheckerPage(req, res) {
           if (det.ok) {
             lamumuTokens = det.tokens;
             // If no local rarity file, enrich first few tokens with rank via OpenSea token endpoint
-            const fetchRarity = String(req.query.fetchRarity ?? (isProd ? 'false' : 'true')).toLowerCase() !== 'false';
+              const envFetchDefault = (process.env.LAMUMU_FETCH_RARITY_DEFAULT ?? null);
+              const defaultFetch = (envFetchDefault != null)
+                ? String(envFetchDefault).toLowerCase() !== 'false'
+                : (apiKey ? true : (!isProd));
+              const fetchRarity = String(req.query.fetchRarity ?? String(defaultFetch)).toLowerCase() !== 'false';
             if (fetchRarity && Array.isArray(lamumuTokens) && lamumuTokens.length) {
               const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
-              let hasLocal = false; try { await fs.access(rarityFile); hasLocal = true; } catch {}
+              let hasLocal = false;
+              // Treat HTTP/HTTPS URL as available source to avoid unnecessary API calls
+              if (/^https?:\/\//i.test(rarityFile)) {
+                hasLocal = true;
+              } else {
+                try { await fs.access(rarityFile); hasLocal = true; } catch {}
+              }
               if (!hasLocal) {
-                const limit = Math.max(1, Number(req.query.rarityLimit ?? 10) || 10);
+              const limitEnv = process.env.LAMUMU_RARITY_FETCH_LIMIT;
+              // Cap the per-address rarity fetch to a maximum of 200 tokens
+              let limit = Math.max(1, Number(req.query.rarityLimit ?? (limitEnv ?? 10)) || 10);
+              limit = Math.min(200, limit);
                 const chain = String(req.query.chain || 'ethereum');
                 const contract = String(req.query.contract || '0x47d7b6116c2303f4d0232c767f71e00db166b67a');
                 for (const t of lamumuTokens.slice(0, limit)) {
@@ -2863,7 +2876,17 @@ async function renderCommonCheckerPage(req, res) {
       if (Array.isArray(lamumuTokens) && lamumuTokens.length) {
         const rarityFile = req.query.rarityFile ? String(req.query.rarityFile) : path.join(process.cwd(), 'output', 'lamumu-rarity.json');
         let rarityData = null;
-        try { rarityData = JSON.parse(await fs.readFile(rarityFile, 'utf8')); } catch {}
+        try {
+          if (/^https?:\/\//i.test(rarityFile)) {
+            const resp = await fetch(rarityFile, { headers: { 'accept': 'application/json' } });
+            if (resp.ok) {
+              const text = await resp.text();
+              try { rarityData = JSON.parse(text); } catch {}
+            }
+          } else {
+            rarityData = JSON.parse(await fs.readFile(rarityFile, 'utf8'));
+          }
+        } catch {}
         let rarityMap = null; // token_id -> { rank?, score? }
         if (rarityData) {
           if (Array.isArray(rarityData)) {
@@ -2895,11 +2918,12 @@ async function renderCommonCheckerPage(req, res) {
           const scoreTxt = (info?.score && Number.isFinite(info.score)) ? info.score.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—';
           return `<div class="row" style="justify-content:space-between"><div>#${String(tid)}</div><div class="hint">${rankTxt}${info?.score?` • Score ${scoreTxt}`:''}</div></div>`;
         }).join('');
+        const hasAnyApiRank = lamumuTokens.some(t => Number.isFinite(toNumber(t?.rank)));
         lamumuRarityBlock = `
           <div class="card" style="margin-top:10px">
             <div class="label">Lamumu holdings${lamumuTokens.length>20?` (first 20 shown)`:''}</div>
             <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px">${rows || '<div class="hint">No tokens found</div>'}</div>
-            ${!rarityData ? '<div class="hint" style="margin-top:8px">Rarity data not available. Provide output/lamumu-rarity.json to show ranks.</div>' : ''}
+            ${( !rarityData && !hasAnyApiRank ) ? '<div class="hint" style="margin-top:8px">Rarity data not available. Provide output/lamumu-rarity.json to show ranks.</div>' : ''}
           </div>`;
       }
     } catch {}
