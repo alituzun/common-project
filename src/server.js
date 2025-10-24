@@ -2968,9 +2968,6 @@ async function renderCommonCheckerPage(req, res) {
         <div class="meta" style="color:#ffffff; font-size:12px;">Created by <a href="https://x.com/0xMelkoreth" target="_blank" rel="noopener" style="color:#ffffff; text-decoration:underline">Melkor.eth</a></div>
       </header>
       <div class="container">
-        <div class="notice" role="note" aria-label="allocation-note">
-          Note: Lamumu total allocation is assumed to be <span class="em">${fmtPct(lamumuAllocPct)}</span>; Aura total allocation is assumed to be <span class="em">${fmtPct(auraAllocPct)}</span>.
-        </div>
         <div class="card">
           <div class="title">Common Checker</div>
           <div class="label">Enter EVM address</div>
